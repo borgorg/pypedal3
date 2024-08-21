@@ -1825,8 +1825,10 @@ def a_inverse_df(pedobj):
     Directly form the inverse of A from the pedigree file - accounts for
     inbreeding - using the method of Quaas (1976).
     """
-    try: logging.info('Entered a_inverse_df()')
-    except: pass
+    try:
+        logging.info('Entered a_inverse_df()')
+    except:
+        pass
     l = pedobj.metadata.num_records
     try:
         from math import sqrt
@@ -1894,10 +1896,10 @@ def a_inverse_df(pedobj):
         line = ''
         for col in range(l):
             if col == 0:
-                line = '%7.5f' % (a_inv[row,col])
+                line = '%7.5f' % a_inv[row,col]
             else:
-                line = '%s%s%s' % (line,',',a_inv[row,col])
-        line = '%s%s' % (line,'\n')
+                line = '%s%s%s' % (line, ',', a_inv[row,col])
+        line = '%s%s' % (line, '\n')
         aout.write(line)
     aout.close()
 

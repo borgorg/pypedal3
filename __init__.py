@@ -9,5 +9,6 @@
 """
 __init__.py
 """
-__all__ = ["pydal", "pyp_db", "pyp_demog", "pyp_graphics", "pyp_io", "pyp_metrics", "pyp_network",  "pyp_newclasses", "pyp_nrm", "pyp_reports", "pyp_tests", "pyp_utils", "pyp_jbc", "pyp_template", "pyp_reports_templates", "pyp_snp"]
+__all__ = ["pyp_db", "pyp_demog", "pyp_graphics", "pyp_io", "pyp_metrics", "pyp_network",  "pyp_newclasses", "pyp_nrm",
+           "pyp_reports", "pyp_utils", "pyp_jbc", "pyp_template", "pyp_reports_templates", "pyp_snp"]
 __version__ = '3.0.0'

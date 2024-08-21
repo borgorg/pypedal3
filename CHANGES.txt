@@ -12,10 +12,29 @@ PyPedal 2 CHANGELOG
 
 CHANGES in PyPedal 3.0.0 (Ridcully)
 ===================================
-??? 03/16/2024  pyp_newclasses::NewPedigree/simulate() has a hard-coded RNG seed, this seems like a terrible
-    idea.
-*** 03/16/2024  I think that I can replace the adodb library for database operations with the
-    pyDAl (https://pypi.org/project/pydal/) library.
+''' 08/20/2024  I think I copied pyp_io/save_newanimals_to_file() from some code in pyp_newclasses in a fit of re-
+    factoring but never actually made the changes needed for the code to work in its new environment. That may be
+    fixed now.
+??? 08/20/2024  pyp_io/renderTitle() and pyp_io/renderBodyText() make references to globals that aren't set outside
+    of the functions, I need to figure out what to do here. I don't remember at the moment why I did that.
+''' 08/20/2024  I went through all of the functions in pyp_io and cleaned things up to improve readability. The linter
+    is much happier now. Some bugs were fixed here and there. Maybe Python 2.x still used file() instead of open() and
+    I never cleaned that up? Maybe I shouldn't have torn out the unit testing framework and should be writing tests
+    instead.
+''' 08/20/2024  pyp_io/a_inverse_to_file() should actually work now that I fixed some typos.
+XXX 08/20/2024  Removed pyp_tests.py. That code hasn't been touched in years and, while I think unit tests
+    are desirable and should be added, I'm not actually going to do that right now.
+XXX 08/20/2024  Removed the pyp_gui pieces, that code hasn't been touched in years and I've no intention
+    of changing that now.
+''' 08/20/2024  pyp_newclasses::NewPedigree/simulate() seeds the RNG with the user-specified value when
+    provided, and uses the system time when a value isn't provided. When a time seed is used the value is
+    written to the logfile for reproducibility.
+''' 03/16/2024  Went through pyp_newclasses and cleaned things up a little.
+??? 03/16/2024  pyp_newclasses::NewPedigree/simulate() had a hard-coded RNG seed, this seems like a terrible
+    idea. Added a 'simulate_seed' parameter to handle this. This should be replaced with a "random" seed that's
+    written to the logfile.
+*** 03/16/2024  I think that I can replace the adodb library for database operations with the pyDAL library
+    (https://pypi.org/project/pydal/).
 ### 12/30/2021  This is a good time to look at "basic" operations to make sure that they have an easy,
     intuitive syntax. Since I'm bumping the version number anyway and we're moving from Python 2 to Python 3
     there's probably not a better time to make syntax changes, even if they're aliases for now.
@@ -25,23 +44,18 @@ CHANGES in PyPedal 3.0.0 (Ridcully)
 !!! 12/30/2021  Need to carefully check all of the set operations in pyp_newclasses::NewPedigree() to make sure
     that there are no weird bugs if "self" uses one missing parent ID and "other" uses a different ID. I suspect
     that, as things stand now, there are some potential gotchas based on that issue lurking in the code.
-*** 01/15/2020  Initial porting of PyPedal from Python 2 (following its
-    end of-life) to Python 3 begun using 2to3. Version number bump to 3.0.0
-    so that there's no opportunity for confusion of the Python 2 and Python 3
+*** 01/15/2020  Initial porting of PyPedal from Python 2 (following its end of-life) to Python 3 begun using
+    2to3. Version number bump to 3.0.0 so that there's no opportunity for confusion of the Python 2 and Python 3
     versions.
 !!! 01/15/2020  adodb may need to be replaced.
-!!! 01/15/2020  Is there now a better/preferred way to use dictionaries for
-    configuration files than dict4ini?
-!!! 01/15/2020  I really want to completely overhaul things so that users only have
-    to use names or original IDs (renumbered IDs are handled in the background and
-    are "invisible" to the user.
-!!! 01/15/2020  Is there any way to get rid of any of the backmaps? They use a lot of
-    memory.
-!!! 01/15/2020  Need to replace alleles with some sort of bitfield/other more efficient
-    structure. This will also be useful eventually for handling SNP data.
-!!! 01/15/2020  In fact, efficiency in every nook and cranny needs to be improved. Can
-    some things be replaced with Numpy arrays? What about potentially loading everything
-    into a Pandas dataframe?
+!!! 01/15/2020  Is there now a better/preferred way to use dictionaries for configuration files than dict4ini?
+!!! 01/15/2020  I really want to completely overhaul things so that users only have to use names or original IDs
+    (renumbered IDs are handled in the background and are "invisible" to the user.
+!!! 01/15/2020  Is there any way to get rid of any of the backmaps? They use a lot of memory.
+!!! 01/15/2020  Need to replace alleles with some sort of bitfield/other more efficient structure. This will also
+    be useful eventually for handling SNP data.
+!!! 01/15/2020  In fact, efficiency in every nook and cranny needs to be improved. Can some things be replaced
+    with Numpy arrays? What about potentially loading everything into a Pandas dataframe?
 
 CHANGES in PyPedal 2.0.4 (Vetinari)
 ===================================
