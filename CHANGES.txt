@@ -12,12 +12,38 @@ PyPedal 2 CHANGELOG
 
 CHANGES in PyPedal 3.0.0 (Ridcully)
 ===================================
+*** 08/21/2024  All the functions in pyp_network now accept a 'debug' argument (boolean).
+*** 08/21/2024  All the functions in pyp_network now return False on falure, rather than 0, -999, or other values.
+*** 08/21/2024  I went through all the functions in network and cleaned things up to improve readability.
+    The linter is much happier now. I also wrapped old prints properly and added console and logfile messages to
+    many functions that were lacking them.
+''' 08/21/2024  I think I caught an indentation problem in pyp_network/ped_to_graph() that would have resulted in only
+    the final parent-offspring pair getting an edge in the graph (a block of code was under-indented).
+*** 08/21/2024  I went through all the functions in pyp_reports and cleaned things up to improve readability.
+    The linter is much happier now. I also wrapped old prints properly.
+*** 08/21/2024  I went through all the functions in pyp_reports_templates and cleaned things up to improve readability.
+    The linter is much happier now.
+*** 08/21/2024  I went through all the functions in pyp_snp and cleaned things up to improve readability. The linter
+    is much happier now. All of the print() statements are now converted from Python 2. An incorrect argument to
+    read_csv() in pyp_snp/read_agil_chromosome_data() was fixed.
+*** 08/21/2024  I went through all the functions in pyp_demog and cleaned things up to improve readability. The linter
+    is much happier now.
++++ 08/21/2024  Added pyp_demog/set_sex_codes(), which maps single-character codes to descriptive strings.
+XXX 08/21/2024  Removed pyp_classes.py from the repo, that code is very old and superceded by pyp_newclasses.py.
+*** 08/21/2024  I went through all the functions in pyp_utils and cleaned things up to improve readability. The linter
+    is much happier now. Severa bugs were fixed. Some deprecated functions (see below) were removed.
+### 08/21/2024  Revisit pyp_utils/sort_dict_by_values() and see if it's still needed or if it can be replaced by
+    an ordered dictionary operation.
++++ 08/21/2024  Added pyp_utils/cmp3() to keep from breaking pyp_utils/sort_dict_by_values().
+''' 08/21/2024  Fixed several breaking bugs in pyp_utils/set_upg().
+XXX 08/21/2024  Removed assign_sexes(), assign_offspring(), and assign_upg() from pyp_utils. They've been replaced with
+    set_sexes(), set_offspring(), and set_upg() to match the other setter routines.
 ''' 08/20/2024  I think I copied pyp_io/save_newanimals_to_file() from some code in pyp_newclasses in a fit of re-
     factoring but never actually made the changes needed for the code to work in its new environment. That may be
     fixed now.
 ??? 08/20/2024  pyp_io/renderTitle() and pyp_io/renderBodyText() make references to globals that aren't set outside
     of the functions, I need to figure out what to do here. I don't remember at the moment why I did that.
-''' 08/20/2024  I went through all of the functions in pyp_io and cleaned things up to improve readability. The linter
+*** 08/20/2024  I went through all of the functions in pyp_io and cleaned things up to improve readability. The linter
     is much happier now. Some bugs were fixed here and there. Maybe Python 2.x still used file() instead of open() and
     I never cleaned that up? Maybe I shouldn't have torn out the unit testing framework and should be writing tests
     instead.

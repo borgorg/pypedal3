@@ -1,7 +1,7 @@
 ###############################################################################
 # NAME: pyp_reports.py
-# VERSION: 2.0.0b7 (29SEPTEMBER2010)
-# AUTHOR: John B. Cole, PhD (john.cole@ars.usda.gov)
+# VERSION: 3.0.0 (21AUGUST2024)
+# AUTHOR: John B. Cole (john.b.cole@gmail.com)
 # LICENSE: LGPL
 ###############################################################################
 # FUNCTIONS:
@@ -15,27 +15,22 @@
 ###############################################################################
 
 ## @package pyp_reports
-# pyp_reports contains a set of procedures for ...
+# pyp_reports contains a set of procedures for creating fancy documents (pedigrees, etc.).
 ##
 
-import logging, os, string, sys
+import logging
+import string
 from . import pyp_db
-from . import pyp_io
-from . import pyp_nrm
 from . import pyp_utils
-from . import pyp_network
-import networkx
 
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.lib.units import inch, cm
 from reportlab.pdfgen import canvas
 
-global metric_to_column
-global byvar_to_column
+METRIC_TO_COLUMN = {'fa': 'coi'}
+BYVAR_TO_COLUMN = {'by': 'birthyear',
+                   'gen': 'generation',}
 
-metric_to_column = {'fa':'coi'}
-byvar_to_column = {'by':'birthyear',
-                  'gen':'generation'}
 
 ##
 # meanMetricBy() returns a dictionary of means keyed by levels of the 'byvar' that
@@ -54,22 +49,24 @@ def meanMetricBy(pedobj, metric='fa', byvar='by', createpdf=False, conn=False):
     # If the user doesn't pass us a db_dict then try and connect to the database
     conn_created = False
     result_dict = {}
-    if conn == False:
+    if not conn:
         conn = pyp_db.connectToDatabase(pedobj)
         conn_created = True
     try:
         if metric not in ['fa']:
-            logging.warning('You passed an unrecognized variable, %s, to pyp_reports/animalMetricBy() in the METRIC field.  It has been changed to \'fa\' (coefficient of inbreeding).', metric)
+            logging.warning('You passed an unrecognized variable, %s, to pyp_reports/animalMetricBy() in the '
+                            'METRIC field.  It has been changed to \'fa\' (coefficient of inbreeding).', metric)
             metric = 'fa'
         if byvar not in ['gen','sex','birthyear','by']:
-            logging.warning('You passed an unrecognized variable, %s, to pyp_reports/animalMetricBy() in the BYVAR field.  It has been changed to \'by\' (birth year).', byvar)
+            logging.warning('You passed an unrecognized variable, %s, to pyp_reports/animalMetricBy() in the '
+                            'BYVAR field. It has been changed to \'by\' (birth year).', byvar)
             byvar = 'by'
 
         if pyp_db.doesTableExist(pedobj, conn=conn):
-            sql = 'select %s, avg(%s) from %s group by %s order by %s' % ( byvar_to_column[byvar], \
-                metric_to_column[metric], pedobj.kw['database_table'], byvar_to_column[byvar], \
-                byvar_to_column[byvar] )
-            #print sql
+            sql = 'select %s, avg(%s) from %s group by %s order by %s' % (BYVAR_TO_COLUMN[byvar],
+                METRIC_TO_COLUMN[metric], pedobj.kw['database_table'], BYVAR_TO_COLUMN[byvar],
+                BYVAR_TO_COLUMN[byvar] )
+            # print('pyp_reports/meanMetricBy() SQL: ', sql)
             cursor = conn.Execute(sql)
             while not cursor.EOF:
                 result_dict[cursor.fields[0]] = cursor.fields[1]
@@ -96,6 +93,7 @@ def meanMetricBy(pedobj, metric='fa', byvar='by', createpdf=False, conn=False):
         pass
     return result_dict
 
+
 ##
 # pdfMeanMetricBy() returns a dictionary of means keyed by levels of the 'byvar' that
 # can be used to draw graphs or prepare reports of summary statistics.
@@ -119,12 +117,12 @@ def pdfMeanMetricBy(pedobj, results, titlepage=0, reporttitle='', reportauthor='
 
     try:
         if reportfile == '':
-            _pdfOutfile = '%s_mean_metric_by.pdf' % ( pedobj.kw['default_report'] )
+            _pdfOutfile = '%s_mean_metric_by.pdf' % pedobj.kw['default_report']
         else:
             _pdfOutfile = reportfile
         if pedobj.kw['messages'] == 'verbose':
-            print('Writing meanMetricBy report to %s' % ( _pdfOutfile ))
-        logging.info('Writing meanMetricBy report to %s', _pdfOutfile )
+            print('Writing meanMetricBy report to %s' % _pdfOutfile)
+        logging.info('Writing meanMetricBy report to %s', _pdfOutfile)
 
         _pdfSettings = _pdfInitialize(pedobj)
         canv = canvas.Canvas(_pdfOutfile, invariant=1)
@@ -153,9 +151,8 @@ def pdfMeanMetricBy(pedobj, results, titlepage=0, reporttitle='', reportauthor='
                 canv.showPage()
                 _pdfDrawPageFrame(canv, _pdfSettings)
                 canv.setFont('Times-Roman', 12)
-                tx = canv.beginText( _pdfSettings['_pdfCalcs']['_left_margin'],
-                    _pdfSettings['_pdfCalcs']['_top_margin'] -
-                    0.5 * _pdfSettings['_pdfCalcs']['_unit'] )
+                tx = canv.beginText(_pdfSettings['_pdfCalcs']['_left_margin'],
+                                    _pdfSettings['_pdfCalcs']['_top_margin']-0.5*_pdfSettings['_pdfCalcs']['_unit'])
         if tx:
             canv.drawText(tx)
             canv.showPage()
@@ -163,6 +160,7 @@ def pdfMeanMetricBy(pedobj, results, titlepage=0, reporttitle='', reportauthor='
         return 1
     except:
         return 0
+
 
 ##
 # pdfPedigreeMetadata() produces a report, in PDF format, of the metadata from
@@ -191,8 +189,8 @@ def pdfPedigreeMetadata(pedobj, titlepage=0, reporttitle='', reportauthor='', re
     else:
         _pdfOutfile = reportfile
     if pedobj.kw['messages'] == 'verbose':
-        print('Writing metadata report to %s' % ( _pdfOutfile ))
-    logging.info('Writing metadata report to %s', _pdfOutfile )
+        print('Writing metadata report to %s' % _pdfOutfile)
+    logging.info('Writing metadata report to %s', _pdfOutfile)
 
     # The _pdfSettings dictionary contains several settings, such as page size,
     # page height and width, and margins, that are used several times.
@@ -207,7 +205,7 @@ def pdfPedigreeMetadata(pedobj, titlepage=0, reporttitle='', reportauthor='', re
     # Add a title page to the report if the user wants one.
     if titlepage:
         if reporttitle == '':
-            reporttitle = 'Metadata for Pedigree\n%s' % (pedobj.kw['pedname'])
+            reporttitle = 'Metadata for Pedigree\n%s' % pedobj.kw['pedname']
         _pdfCreateTitlePage(canv, _pdfSettings, reporttitle, reportauthor)
 
     # Start a new page of output.  Split the metadata output returned by the
@@ -217,20 +215,18 @@ def pdfPedigreeMetadata(pedobj, titlepage=0, reporttitle='', reportauthor='', re
     canv.setFont("Times-Bold", 12)
     tx = canv.beginText( _pdfSettings['_pdfCalcs']['_left_margin'],
         _pdfSettings['_pdfCalcs']['_top_margin'] - 0.5 * _pdfSettings['_pdfCalcs']['_unit'] )
-    _metadata_string = string.split(pedobj.metadata.stringme(), '\n')
+    _metadata_string = pedobj.metadata.stringme().split('\n')
     for _m in _metadata_string:
         tx.textLine(_m)
         # Page breaking has to be done manually.  Oh, well, I was able to steal, er,
         # borrow this but from odyssey.py.
-        if tx.getY() < _pdfSettings['_pdfCalcs']['_bottom_margin'] + \
-            0.5 * _pdfSettings['_pdfCalcs']['_unit']:
+        if tx.getY() < _pdfSettings['_pdfCalcs']['_bottom_margin'] + 0.5 * _pdfSettings['_pdfCalcs']['_unit']:
             canv.drawText(tx)
             canv.showPage()
             _pdfDrawPageFrame(canv, _pdfSettings)
             canv.setFont('Times-Roman', 12)
-            tx = canv.beginText( _pdfSettings['_pdfCalcs']['_left_margin'],
-                _pdfSettings['_pdfCalcs']['_top_margin'] -
-                0.5 * _pdfSettings['_pdfCalcs']['_unit'] )
+            tx = canv.beginText(_pdfSettings['_pdfCalcs']['_left_margin'],
+                                _pdfSettings['_pdfCalcs']['_top_margin']-0.5*_pdfSettings['_pdfCalcs']['_unit'])
 
             pg = canv.getPageNumber()
             if pedobj.kw['messages'] == 'verbose' and pg % 10 == 0:
@@ -245,11 +241,12 @@ def pdfPedigreeMetadata(pedobj, titlepage=0, reporttitle='', reportauthor='', re
         # example distributed with ReportLab, but I'm not sure why.  If the
         # last page of your document is getting chopped off try uncommenting
         # this line.
-        #_pdfDrawPageFrame(canv, _pdfSettings)
+        # _pdfDrawPageFrame(canv, _pdfSettings)
 
     # Once your report has been assembled it must be written to disc.  If you
     # omit the 'canv.save()' line then your PDF will never be written to a file.
     canv.save()
+
 
 ##
 # pdf3GenPed() draws a three-generation pedigree for animal 'animalID'.
@@ -281,7 +278,7 @@ def pdf3GenPed(animalID, pedobj, titlepage=0, reporttitle='', reportauthor='', r
     else:
         _pdfOutfile = reportfile
     if pedobj.kw['messages'] == 'verbose':
-        print('Writing 3GenPed to %s' % ( _pdfOutfile ))
+        print('Writing 3GenPed to %s' % _pdfOutfile)
     logging.info('Writing 3GenPed to %s', _pdfOutfile )
 
     _pdfSettings = _pdfInitialize(pedobj)
@@ -302,9 +299,8 @@ def pdf3GenPed(animalID, pedobj, titlepage=0, reporttitle='', reportauthor='', r
             # Each pedigree is on a separate page, and page settings do
             # not persist across pages.
             canv.setFont("Times-Bold", 12)
-            tx = canv.beginText( _pdfSettings['_pdfCalcs']['_left_margin'],
-            _pdfSettings['_pdfCalcs']['_top_margin'] - 0.5 * \
-                _pdfSettings['_pdfCalcs']['_unit'] )
+            tx = canv.beginText(_pdfSettings['_pdfCalcs']['_left_margin'],
+                                _pdfSettings['_pdfCalcs']['_top_margin']-0.5*_pdfSettings['_pdfCalcs']['_unit'])
             _pdfDrawPageFrame(canv, _pdfSettings)
             # We need to know the animal's renumbered ID. If the pedigree
             # we are using was based on animal names rather than integral
@@ -362,8 +358,8 @@ def pdf3GenPed(animalID, pedobj, titlepage=0, reporttitle='', reportauthor='', r
             else:
                 _places['dds'] = pedobj.kw['missing_parent']
                 _places['ddd'] = pedobj.kw['missing_parent']
-            #for k,v in _places.iteritems():
-            #        print k,v
+            # for k,v in _places.iteritems():
+            #     print(k, v)
 
             _sill_width = _pdfSettings['_pdfCalcs']['_frame_width'] * 0.25
             _16 = _pdfSettings['_pdfCalcs']['_frame_height'] / 16.
@@ -392,8 +388,7 @@ def pdf3GenPed(animalID, pedobj, titlepage=0, reporttitle='', reportauthor='', r
             os['ssd']['x'] = _x+(3*_sill_width); os['ssd']['y'] = _y+(13*_16)
             os['sss']['x'] = _x+(3*_sill_width); os['sss']['y'] = _y+(15*_16)
 
-            _line = 'Pedigree for %s (%s)' % ( pedobj.pedigree[_anidx].name, \
-                pedobj.pedigree[_anidx].originalID )
+            _line = 'Pedigree for %s (%s)' % (pedobj.pedigree[_anidx].name, pedobj.pedigree[_anidx].originalID)
             canv.setFont("Times-Bold", 12)
             canv.drawString( _x, _pdfSettings['_pdfCalcs']['_top_margin']-0.25*_16, _line )
             canv.setLineWidth(1)
@@ -404,11 +399,11 @@ def pdf3GenPed(animalID, pedobj, titlepage=0, reporttitle='', reportauthor='', r
             for k in list(_places.keys()):
                 canv.line( os[k]['x'], os[k]['y'], os[k]['x']+_sill_width, os[k]['y'] )
                 if _places[k] == pedobj.kw['missing_parent']:
-                    _sill_text_1 = '(%s)' % ( 'Unknown Parent' )
+                    _sill_text_1 = '(%s)' % 'Unknown Parent'
                     _sill_text_2 = ''
                 else:
-                    _sill_text_1 = '%s' % ( pedobj.pedigree[_places[k]-1].name )
-                    _sill_text_2 = '(%s)' % ( pedobj.pedigree[_places[k]-1].originalID )
+                    _sill_text_1 = '%s' % pedobj.pedigree[_places[k]-1].name
+                    _sill_text_2 = '(%s)' % pedobj.pedigree[_places[k]-1].originalID
                 canv.setFont("Times-Bold", 12)
                 canv.drawString( os[k]['x'], os[k]['y']+2, _sill_text_1 )
                 canv.setFont("Times-Roman", 12)
@@ -416,35 +411,35 @@ def pdf3GenPed(animalID, pedobj, titlepage=0, reporttitle='', reportauthor='', r
                 if k == 'a':
                     canv.setFont("Times-Roman", 12)
                     if pedobj.pedigree[_places[k]-1].herd == 'u':
-                        _herd = '%s' % ( pedobj.kw['missing_herd'] )
+                        _herd = '%s' % pedobj.kw['missing_herd']
                     else:
-                        _herd = '%s' % ( pedobj.pedigree[_places[k]-1].herd )
-                    _breed = '%s' % ( pedobj.pedigree[_places[k]-1].breed )
-                    _inbreed = '%s' % ( pedobj.pedigree[_places[k]-1].fa )
-                    _pedcomp = '%5.3f' % ( pedobj.pedigree[_places[k]-1].pedcomp )
-                    canv.drawString( _x, _y+0.25*_16, 'Pedigree completeness:' )
-                    canv.drawString( _x+_sill_width, _y+0.25*_16, _pedcomp )
-                    canv.drawString( _x, _y+0.5*_16, 'Inbreeding:' )
-                    canv.drawString( _x+_sill_width, _y+0.5*_16, _inbreed )
-                    canv.drawString( _x, _y+0.75*_16, 'Breed:' )
-                    canv.drawString( _x+_sill_width, _y+0.75*_16, _breed )
-                    canv.drawString( _x, _y+_16, 'Herd:' )
-                    canv.drawString( _x+_sill_width, _y+_16, _herd )
+                        _herd = '%s' % pedobj.pedigree[_places[k]-1].herd
+                    _breed = '%s' % pedobj.pedigree[_places[k]-1].breed
+                    _inbreed = '%s' % pedobj.pedigree[_places[k]-1].fa
+                    _pedcomp = '%5.3f' % pedobj.pedigree[_places[k]-1].pedcomp
+                    canv.drawString(_x, _y+0.25*_16, 'Pedigree completeness:')
+                    canv.drawString(_x+_sill_width, _y+0.25*_16, _pedcomp)
+                    canv.drawString(_x, _y+0.5*_16, 'Inbreeding:')
+                    canv.drawString(_x+_sill_width, _y+0.5*_16, _inbreed)
+                    canv.drawString(_x, _y+0.75*_16, 'Breed:')
+                    canv.drawString(_x+_sill_width, _y+0.75*_16, _breed)
+                    canv.drawString(_x, _y+_16, 'Herd:')
+                    canv.drawString(_x+_sill_width, _y+_16, _herd)
             # Draw the vertical lines that join the sills.
             ## Parents
-            canv.line( os['s']['x'],os['d']['y'],os['s']['x'],os['s']['y'] )
+            canv.line(os['s']['x'], os['d']['y'], os['s']['x'], os['s']['y'])
             ## Maternal grandparents
-            canv.line( os['ds']['x'],os['dd']['y'],os['ds']['x'],os['ds']['y'] )
+            canv.line(os['ds']['x'], os['dd']['y'], os['ds']['x'], os['ds']['y'])
             ## Paternal grandparents
-            canv.line( os['ss']['x'],os['sd']['y'],os['ss']['x'],os['ss']['y'] )
+            canv.line(os['ss']['x'], os['sd']['y'], os['ss']['x'], os['ss']['y'])
             ## Mat-mat grandparents
-            canv.line( os['dds']['x'],os['ddd']['y'],os['dds']['x'],os['dds']['y'] )
+            canv.line(os['dds']['x'], os['ddd']['y'], os['dds']['x'], os['dds']['y'])
             ## Mat-pat grandparents
-            canv.line( os['dss']['x'],os['dsd']['y'],os['dss']['x'],os['dss']['y'] )
+            canv.line(os['dss']['x'], os['dsd']['y'], os['dss']['x'], os['dss']['y'])
             ## Pat-mat grandparents
-            canv.line( os['sds']['x'],os['sdd']['y'],os['sds']['x'],os['sds']['y'] )
+            canv.line(os['sds']['x'], os['sdd']['y'], os['sds']['x'], os['sds']['y'])
             ## Pat-pat grandparents
-            canv.line( os['sss']['x'],os['ssd']['y'],os['sss']['x'],os['sss']['y'] )
+            canv.line(os['sss']['x'], os['ssd']['y'], os['sss']['x'], os['sss']['y'])
             # Make sure we draw the page to the canvas when we've
             # finished with it.
             canv.drawText(tx)
@@ -454,6 +449,7 @@ def pdf3GenPed(animalID, pedobj, titlepage=0, reporttitle='', reportauthor='', r
     except:
         logging.error('Unable to fetch the pedigree for animal %s in pyp_reports/pdf3GenPed()!',animalID)
         return 0
+
 
 ###############################################################################
 # _pdfDrawPageFrame() was taken from the procedure drawPageFrame() included in
@@ -504,6 +500,7 @@ def _pdfInitialize(pedobj):
     _pdfSettings['_pdfCalcs'] = _pdfCalcs
     return _pdfSettings
 
+
 ##
 # _pdfDrawPageFrame() nicely frames page contents and includes the
 # document title in a header and the page number in a footer.
@@ -531,9 +528,8 @@ def _pdfDrawPageFrame(canv, _pdfSettings):
         _pdfSettings['_pdfCalcs']['_right_margin'],
         _pdfSettings['_pdfCalcs']['_top_margin'])
     canv.setFont('Times-Italic', 12)
-    canv.drawString(_pdfSettings['_pdfCalcs']['_right_margin'] - \
-        1.85 * _pdfSettings['_pdfCalcs']['_unit'],
-        _pdfSettings['_pdfCalcs']['_top_margin'] + 2,
+    canv.drawString(_pdfSettings['_pdfCalcs']['_right_margin'] - 1.85 * _pdfSettings['_pdfCalcs']['_unit'],
+                    _pdfSettings['_pdfCalcs']['_top_margin'] + 2,
         pyp_utils.pyp_nice_time())
 
     # Write the page number bottom center.
@@ -546,8 +542,9 @@ def _pdfDrawPageFrame(canv, _pdfSettings):
         _pdfSettings['_pdfCalcs']['_right_margin'],
         _pdfSettings['_pdfCalcs']['_bottom_margin'])
     canv.drawCentredString(0.5 * _pdfSettings['_pdfCalcs']['_page'][0],
-        0.5 * _pdfSettings['_pdfCalcs']['_unit'],
-        "Page %d" % canv.getPageNumber())
+                           0.5*_pdfSettings['_pdfCalcs']['_unit'],
+                           "Page %d" % canv.getPageNumber())
+
 
 ##
 # _pdfCreateTitlePage() adds a title page to a ReportLab canvas object.
@@ -569,13 +566,14 @@ def _pdfCreateTitlePage(canv, _pdfSettings, reporttitle = '', reportauthor = '')
     canv.setFont("Times-Bold", 36)
     if reporttitle == '':
         canv.drawCentredString(0.5 * _pdfSettings['_pdfCalcs']['_page'][0],
-            7 * _pdfSettings['_pdfCalcs']['_unit'], _pdfSettings['_pdfTitle'])
+                               7 * _pdfSettings['_pdfCalcs']['_unit'],
+                               _pdfSettings['_pdfTitle'])
     else:
         # This is potentially confusing, so here goes: we're going to split
         # the title on '\n's and write each resulting bit of text on its own
         # line.  drawCentredString() does not automatically do this so I had
         # to hack it on.
-        _bits = string.split(reporttitle, '\n')
+        _bits = reporttitle.split('\n')
         for _b in _bits:
             # Based strictly on observation we need to wrap titles longer than 26
             # characters when using the default 36-point typeface.
@@ -583,16 +581,20 @@ def _pdfCreateTitlePage(canv, _pdfSettings, reporttitle = '', reportauthor = '')
                 _b_wrapped = textwrap.wrap(_b, 26, break_long_words=True)
 #                 print _b_wrapped
                 for _bw in _b_wrapped:
-                    canv.drawCentredString( 0.5 * _pdfSettings['_pdfCalcs']['_page'][0], \
-                        _title_y, _bw)
-                    _title_y = _title_y - 1 * _pdfSettings['_pdfCalcs']['_unit']
+                    canv.drawCentredString(0.5*_pdfSettings['_pdfCalcs']['_page'][0],
+                                           _title_y,
+                                           _bw)
+                    _title_y = _title_y-1*_pdfSettings['_pdfCalcs']['_unit']
             else:
-                canv.drawCentredString( 0.5 * _pdfSettings['_pdfCalcs']['_page'][0], _title_y, _b)
+                canv.drawCentredString(0.5 * _pdfSettings['_pdfCalcs']['_page'][0],
+                                       _title_y,
+                                       _b)
                 _title_y = _title_y - 1 * _pdfSettings['_pdfCalcs']['_unit']
     # Only print the author's name if there is one.  A report is not required to have an
     # author.
     if reportauthor != '':
         canv.setFont("Times-Bold", 18)
-        canv.drawCentredString(0.5 * _pdfSettings['_pdfCalcs']['_page'][0],
-            _title_y, reportauthor)
+        canv.drawCentredString(0.5*_pdfSettings['_pdfCalcs']['_page'][0],
+                               _title_y,
+                               reportauthor)
     canv.showPage()

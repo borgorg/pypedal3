@@ -3,7 +3,7 @@
 ###############################################################################
 # NAME: __init__.py
 # VERSION: 3.0.0 (16MARCH2024)
-# AUTHOR: John B. Cole (john.cole@uscdcb.com)
+# AUTHOR: John B. Cole (john.b.cole@gmail.com)
 # LICENSE: LGPL
 ###############################################################################
 """

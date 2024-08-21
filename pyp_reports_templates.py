@@ -1,7 +1,7 @@
 ###############################################################################
 # NAME: pyp_reports_templates.py
-# VERSION: 2.0.0 (29SEPTEMBER2010)
-# AUTHOR: John B. Cole, PhD (john.cole@ars.usda.gov)
+# VERSION: 3.0.0 (21AUGUST2024)
+# AUTHOR: John B. Cole (john.b.cole@gmail.com)
 # LICENSE: LGPL
 ###############################################################################
 # FUNCTIONS:
@@ -17,20 +17,26 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.rl_config import defaultPageSize
 from reportlab.lib.units import inch
 
+PAGE_HEIGHT = defaultPageSize[1]
+PAGE_WIDTH = defaultPageSize[0]
 styles = getSampleStyleSheet()
+
 
 ##
 # We define the fixed features of the first page of the document with this function.
-def myFirstPage(_pdfSettings, canvas, doc):
+def myFirstPage(_pdfSettings, canvas, doc, _pdfTitle="My Title"):
     """
     We define the fixed features of the first page of the document with this function.
     """
     canvas.saveState()
     canvas.setFont('Times-Bold',16)
-    canvas.drawCentredString(_pdfSettings['_pdfCalcs']['_page_width']/2.0, _pdfSettings['_pdfCalcs']['_page_height']-108, _pdfTitle)
+    canvas.drawCentredString(_pdfSettings['_pdfCalcs']['_page_width']/2.0,
+                             _pdfSettings['_pdfCalcs']['_page_height']-108,
+                             _pdfTitle)
     canvas.setFont('Times-Roman',9)
     canvas.drawString(inch, 0.75 * inch, "First Page / %s" % _pdfSettings['_pdfPageinfo'])
     canvas.restoreState()
+
 
 ##
 # Since we want pages after the first to look different from the first we define an
@@ -47,15 +53,15 @@ def myLaterPages(_pdfSettings, canvas, doc):
     canvas.drawString(inch, 0.75 * inch, "Page %d %s" % (doc.page, _pdfSettings['_pdfPageinfo']))
     canvas.restoreState()
 
+
 def go(_pdfSettings):
-      doc = SimpleDocTemplate("phello.pdf")
-      print('Writing PDF to %s' % ( "phello.pdf" ))
-      Story = [Spacer(1,2*inch)]
-      style = styles["Normal"]
-      for i in range(100):
-          bogustext = ("Paragraph number %s. " % i) *20
-          p = Paragraph(bogustext, style)
-          Story.append(p)
-          Story.append(Spacer(1,0.2*inch))
-      doc.build(Story, onFirstPage=myFirstPage(_pdfSettings),
-                    onLaterPages=myLaterPages(_pdfSettings))
+    doc = SimpleDocTemplate("phello.pdf")
+    print('Writing PDF to %s' % "phello.pdf" )
+    Story = [Spacer(1, 2*inch)]
+    style = styles["Normal"]
+    for i in range(100):
+        bogustext = ("Paragraph number %s. " % i)*20
+        p = Paragraph(bogustext, style)
+        Story.append(p)
+        Story.append(Spacer(1, 0.2*inch))
+    doc.build(Story, onFirstPage=myFirstPage(_pdfSettings), onLaterPages=myLaterPages(_pdfSettings))

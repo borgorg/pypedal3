@@ -2,8 +2,8 @@
 
 ###############################################################################
 # NAME: pyp_snp.py
-# VERSION: 2.0.0 (11MAY2020)
-# AUTHOR: John B. Cole, PhD (john.cole@usda.gov)
+# VERSION: 3.0.0 (21MAUGUST2024)
+# AUTHOR: John B. Cole, PhD (john.b.cole@gmail.com)
 # LICENSE: LGPL
 ###############################################################################
 # FUNCTIONS:
@@ -25,10 +25,12 @@
 # morphism (SNP) genotype data.
 ##
 
+
 import logging
 import numpy as np
 import pandas as pd
 import random
+
 
 ##
 # read_agil_chromosome_data() loads SNP marker information from the chromosome.data file
@@ -43,20 +45,20 @@ def read_agil_chromosome_data(filename='chromosome.data'):
     number, within-chromosome marker number, overall marker number, and location in base pairs).
     """
     try:
-        df = pd.read_csv(filename, header=0, skiprows=0, delim_whitespace=True,
-                         usecols=[0, 1, 2, 3, 4], colnames=['snp_name', 'chrome', 'within', 'overall',
-                                                            'location'])
-        print '[INFO]: pyp_snp/read_agil_chromosome_data() read information about %s SNP from file %s.' % \
-              (len(df), filename)
-        logging.info('pyp_snp/read_agil_chromosome_data() read information about %s SNP from file %s.' % \
+        df = pd.read_csv(filename, header=0, skiprows=0, delim_whitespace=True, usecols=[0, 1, 2, 3, 4],
+                         names=['snp_name', 'chrome', 'within', 'overall', 'location'])
+        print('[INFO]: pyp_snp/read_agil_chromosome_data() read information about %s SNP from file %s.' %
+              (len(df), filename))
+        logging.info('pyp_snp/read_agil_chromosome_data() read information about %s SNP from file %s.' %
                      (len(df), filename))
         return df
     except:
-        logging.error('pyp_snp/read_agil_chromosome_data() could not access the file %s.' % \
+        logging.error('pyp_snp/read_agil_chromosome_data() could not access the file %s.' %
                       filename)
-        print '[ERROR]: pyp_snp/read_agil_chromosome_data() could not access the file %s.' % \
-              filename
+        print('[ERROR]: pyp_snp/read_agil_chromosome_data() could not access the file %s.' %
+              filename)
         return False
+
 
 ##
 # read_agil_pedigree_file() loads pedigree information from the file format used by AGIL and CDCB.
@@ -64,6 +66,7 @@ def read_agil_chromosome_data(filename='chromosome.data'):
 # @retval A Pandas dataframe, or False if the file could not be read.
 def read_agil_pedigree_file():
     pass
+
 
 ##
 # read_agil_genotypes_txt() loads SNP genotypes from the genotypes.txt file used by AGIL and CDCB.
@@ -73,17 +76,16 @@ def read_agil_genotypes_txt(filename='genotypes.txt'):
     try:
         df = pd.read_csv(filename, delim_whitespace=True, dtype={'genotype': str},
                          names=['animalID', 'chip_type', 'n_snps', 'genotype'] )
-        print '[INFO]: pyp_snp/read_agil_genotypes_txt() read information about %s SNP genotypes ' \
-              'from file %s.' % (len(df), filename)
+        print('[INFO]: pyp_snp/read_agil_genotypes_txt() read information about %s SNP genotypes '
+              'from file %s.' % (len(df), filename))
         logging.info('pyp_snp/read_agil_genotypes_txt() read information about %s SNP genotypes '
                      'from file %s.' % (len(df), filename))
         return df
     except:
-        logging.error('pyp_snp/read_agil_genotypes_txt() could not access the file %s.' % \
-                      filename)
-        print '[ERROR]: pyp_snp/read_agil_genotypes_txt() could not access the file %s.' % \
-              filename
+        logging.error('pyp_snp/read_agil_genotypes_txt() could not access the file %s.' % filename)
+        print('[ERROR]: pyp_snp/read_agil_genotypes_txt() could not access the file %s.' % filename)
         return False
+
 
 ##
 # read_agil_true_frequency() loads SNP frequency data from the true.frequency file used by AGIL and CDCB.
@@ -98,17 +100,16 @@ def read_agil_true_frequency(filename='true.frequency'):
     try:
         df = pd.read_csv('true.frequency', delim_whitespace=True,
                          names=['snp_name', 'overall', 'frequency'])
-        print '[INFO]: pyp_snp/read_agil_true_frequency() read information about %s SNP ' \
-              'from file %s.' % (len(df), filename)
+        print('[INFO]: pyp_snp/read_agil_true_frequency() read information about %s SNP '
+              'from file %s.' % (len(df), filename))
         logging.info('pyp_snp/read_agil_true_frequency() read information about %s SNP '
                      'from file %s.' % (len(df), filename))
         return df
     except:
-        logging.error('pyp_snp/read_agil_true_frequency() could not access the file %s.' % \
-                      filename)
-        print '[ERROR]: pyp_snp/read_agil_true_frequency() could not access the file %s.' % \
-              filename
+        logging.error('pyp_snp/read_agil_true_frequency() could not access the file %s.' % filename)
+        print('[ERROR]: pyp_snp/read_agil_true_frequency() could not access the file %s.' % filename)
         return False
+
 
 ##
 # form_p_matrix_from_snp() calculates individual SNP frequencies from the genotypes provided.
@@ -125,7 +126,7 @@ def form_p_matrix_from_snp(pedobj, debug=False):
     if pedobj.snp.empty:
 
         logging.error('pyp_snp/form_p_matrix_from_snp() could not form P because the pedigree has no SNP data.')
-        print '[ERROR]: pyp_snp/form_p_matrix_from_snp() could not form P because the pedigree has no SNP data.'
+        print('[ERROR]: pyp_snp/form_p_matrix_from_snp() could not form P because the pedigree has no SNP data.')
         return False
 
     else:
@@ -134,17 +135,18 @@ def form_p_matrix_from_snp(pedobj, debug=False):
         # We can estimate the frequencies from the data provided in the genotypes file.
         # f_i = \sum_j^n m_ij / 2*n where n is the number of genotyped animals
         P = np.zeros( [ len(pedobj.snp.iloc[0,3]) ] )
-        for a in xrange(len( pedobj.snp )):
-            for s in xrange( len(pedobj.snp.iloc[0,3]) ):
+        for a in range(len( pedobj.snp )):
+            for s in range( len(pedobj.snp.iloc[0,3]) ):
                 P[s] = P[s] + float(pedobj.snp.iloc[a, 3][s])
         P = P / ( 2. * len( pedobj.snp ) )
 
         if debug:
-            print
-            print 'P:\t', P
-            print
+            print()
+            print('P:\t', P)
+            print()
 
         return P
+
 
 ##
 # form_m_matrix_from_snp() form the matrix, M, that specifies which marker alleles each individual inherited.
@@ -164,7 +166,7 @@ def form_m_matrix_from_snp(pedobj, scale_m = True, debug=False):
     if pedobj.snp.empty:
 
         logging.error('pyp_snp/form_m_matrix_from_snp() could not form M because the pedigree has no SNP data.')
-        print '[ERROR]: pyp_snp/form_m_matrix_from_snp() could not form M because the pedigree has no SNP data.'
+        print('[ERROR]: pyp_snp/form_m_matrix_from_snp() could not form M because the pedigree has no SNP data.')
         return False
 
     else:
@@ -173,9 +175,9 @@ def form_m_matrix_from_snp(pedobj, scale_m = True, debug=False):
 
         # Form M, an n-by-m matrix of the m alleles inherited by each of the n individuals
         # in the population, as in VanRaden (2008; p. 4416).
-        M = np.zeros( [ len(pedobj.snp), len(pedobj.snp.iloc[0,3]) ] )
-        for a in range( len( pedobj.snp ) ):
-            for s in range( len( pedobj.snp.iloc[0,3] ) ):
+        M = np.zeros([len(pedobj.snp), len(pedobj.snp.iloc[0,3])])
+        for a in range(len(pedobj.snp)):
+            for s in range(len(pedobj.snp.iloc[0,3])):
                 M[a, s] = pedobj.snp.iloc[a, 3][s]
                 if scale_m:
                     # Scale the elements of M to -1, 0, and 1 for the homozygote, heterozygote,
@@ -183,11 +185,12 @@ def form_m_matrix_from_snp(pedobj, scale_m = True, debug=False):
                     M[a, s] = M[a, s] - P[s]
 
         if debug:
-            print
-            print 'M:\t', M
-            print
+            print()
+            print('M:\t', M)
+            print()
 
         return M
+
 
 ##
 # form_grm_from_snp() forms the genomic relationship matrix, G, from the SNP information provided. G is a square
@@ -209,7 +212,7 @@ def form_grm_from_snp(pedobj, scale_m=True, method=1, debug=False):
     if pedobj.snp.empty:
 
         logging.error('pyp_snp/form_grm_from_snp() could not form a GRM because the pedigree has no SNP data.')
-        print '[ERROR]: pyp_snp/form_grm_from_snp() could not form a GRM because the pedigree has no SNP data.'
+        print('[ERROR]: pyp_snp/form_grm_from_snp() could not form a GRM because the pedigree has no SNP data.')
         return False
 
     else:
@@ -219,43 +222,43 @@ def form_grm_from_snp(pedobj, scale_m=True, method=1, debug=False):
         M = form_m_matrix_from_snp(pedobj, scale_m=scale_m, debug=debug)
 
         # Initialize the genomic relationship matrix
-        G = np.zeros( [ len(pedobj.snp), len(pedobj.snp) ] )
+        G = np.zeros([len(pedobj.snp), len(pedobj.snp)])
 
         # Form G using VanRaden's Method 1
         if method == 1:
-
             # Compute denominator: 2 * \sump_i(1-p_1)
             sum_freq = 0.
-            for i in range( len( P ) ):
-                sum_freq += P[i] * ( 1. - P[i] )
+            for i in range(len(P)):
+                sum_freq += P[i] * (1. - P[i])
 
             if debug:
-                print
-                print 'sum_freq:\t', sum_freq
-                print '2*sum_freq:\t', 2*sum_freq
-                print
+                print()
+                print('sum_freq:\t', sum_freq)
+                print('2*sum_freq:\t', 2*sum_freq)
+                print()
 
             Z = M - P
 
             if debug:
-                print
-                print 'Z:\t', Z
-                print
+                print()
+                print('Z:\t', Z)
+                print()
 
             G = Z.dot(Z.T) / ( 2. * sum_freq )
 
             if debug:
-                print
-                print 'G:\t', G
-                print
+                print()
+                print('G:\t', G)
+                print()
 
         else:
 
             logging.error('pyp_snp/form_grm_from_snp() could not form a GRM using VanRaden method %s because that'
                           'has not yet been implemented.', method)
-            print '[ERROR]: pyp_snp/form_grm_from_snp() could not form a GRM using VanRaden method %s because that' \
-                  'has not yet been implemented.' % method
+            print('[ERROR]: pyp_snp/form_grm_from_snp() could not form a GRM using VanRaden method %s because that' \
+                  'has not yet been implemented.' % method)
             return False
+
 
 ##
 # compute_genomic_inbreeding_from_grm() calculates genomic inbreeding from the diagonals of G, and computed summary
@@ -282,8 +285,10 @@ def compute_genomic_inbreeding_from_grm(pedobj, g_matrix=False, scale_m=True, re
     if not g_matrix:
 
         if pedobj.snp.empty:
-            logging.error('pyp_snp/compute_genomic_inbreeding_from_grm() could not form a GRM because the pedigree has no SNP data.')
-            print '[ERROR]: pyp_snp/compute_genomic_inbreeding_from_grm() could not form a GRM because the pedigree has no SNP data.'
+            logging.error('pyp_snp/compute_genomic_inbreeding_from_grm() could not form a GRM because the pedigree '
+                          'has no SNP data.')
+            print('[ERROR]: pyp_snp/compute_genomic_inbreeding_from_grm() could not form a GRM because the pedigree '
+                  'has no SNP data.')
             return False
 
         else:
@@ -293,46 +298,48 @@ def compute_genomic_inbreeding_from_grm(pedobj, g_matrix=False, scale_m=True, re
         logging.warning('pyp_snp/compute_genomic_inbreeding_from_grm(): There are different numbers of SNP '
                         'genotypes and animals in the pedigree file, which can lead to errors in matching '
                         'genomic relationships and coefficients of inbreeding!')
-        print '[WARNING]: pyp_snp/compute_genomic_inbreeding_from_grm(): There are different numbers of SNP ' \
-              'genotypes and animals in the pedigree file, which can lead to errors in matching genomic ' \
-              'relationships and coefficients of inbreeding!'
+        print('[WARNING]: pyp_snp/compute_genomic_inbreeding_from_grm(): There are different numbers of SNP '
+              'genotypes and animals in the pedigree file, which can lead to errors in matching genomic '
+              'relationships and coefficients of inbreeding!')
 
     # Setup data structures
     fx = {}
     metadata = {}
 
     if rels:
-        rel_dict = {}
-        rel_dict['r_count'] = (pedobj.snp.index * (pedobj.snp.index + 1)) / 2
-        rel_dict['r_nonzero_count'] = 0
-        rel_dict['r_min'] = 0.
-        rel_dict['r_max'] = 0.
-        rel_dict['r_rng'] = 0.
-        rel_dict['r_avg'] = 0.
-        rel_dict['r_nonzero_avg'] = 0.
-        rel_dict['r_sum'] = 0.
-        rel_dict['r_nonzero_sum'] = 0.
+        rel_dict = {
+            'r_count': (pedobj.snp.index * (pedobj.snp.index + 1)) / 2,
+            'r_nonzero_count': 0,
+            'r_min': 0.,
+            'r_max': 0.,
+            'r_rng': 0.,
+            'r_avg': 0.,
+            'r_nonzero_avg': 0.,
+            'r_sum': 0.,
+            'r_nonzero_sum': 0.,
+        }
 
-        reldict = {}
-        reldict['r_count'] = 0
-        reldict['r_nonzero_count'] = 0
-        reldict['r_nonzero_sum'] = 0.
-        reldict['r_max'] = 0.
-        reldict['r_min'] = 1.
-        reldict['r_sum'] = 0.
+        reldict = {
+            'r_count': 0,
+            'r_nonzero_count': 0,
+            'r_nonzero_sum': 0.,
+            'r_max': 0.,
+            'r_min': 1.,
+            'r_sum': 0.,
+        }
 
     # Pull inbreeding coefficients out of the genomic relationship matrix.
-    for _i in xrange(pedobj.snp.index):
+    for _i in range(pedobj.snp.index):
         fx[pedobj.pedigree[_i].animalID] = G[_i, _i] - 1.
         if update_pedigree:
             pedobj.pedigree[_i].fg = G[_i, _i] - 1.
 
     # Pull coefficients of relationship  out of the genomic relationship matrix.
-    if rels == 1:
+    if rels:
         n = len(pedobj.snp.index)
-        reldict['r_count'] = ( n * ( n + 1 ) ) / 2
-        for i in xrange(n):
-            for j in xrange (i, n):
+        reldict['r_count'] = (n*(n+1))/2
+        for i in range(n):
+            for j in range (i, n):
                 if i != j:
                     if G[i, j] > 0.:
                         reldict['r_nonzero_count'] = \
@@ -364,7 +371,7 @@ def compute_genomic_inbreeding_from_grm(pedobj, g_matrix=False, scale_m=True, re
     f_nonzero_min = 999.0
     f_nonzero_max = -999.0
     f_nonzero_count = 0
-    for k, v in fx.iteritems():
+    for k, v in fx.items():
         if output:
             if 'ASD' in pedobj.kw['pedformat']:
                 aout.write('%s\t%s\t%s\n'%(pedobj.pedigree[int(k)-1].name,k,v))
@@ -422,7 +429,7 @@ def compute_genomic_inbreeding_from_grm(pedobj, g_matrix=False, scale_m=True, re
 
     if rels:
         if pedobj.kw['debug_messages'] == 1:
-            print '[DEBUG]: reldict: ', reldict
+            print('[DEBUG]: reldict: ', reldict)
         if reldict['r_count'] > 0:
             if reldict['r_min'] < rel_dict['r_min']:
                 rel_dict['r_min'] = reldict['r_min']
@@ -440,30 +447,30 @@ def compute_genomic_inbreeding_from_grm(pedobj, g_matrix=False, scale_m=True, re
         line = '='*80
         aout.write('%s\n' % line)
         aout.write('Genomic Inbreeding Statistics\n')
-        line = '-'*80
         aout.write('All animals:\n')
         aout.write('%s\n' % line)
-        aout.write('\tCount:\t%s\n'%len(fx.keys()))
-        aout.write('\tMean:\t%s\n'%f_avg)
-        aout.write('\tMin:\t%s\n'%f_min)
-        aout.write('\tMax:\t%s\n'%f_max)
-        line = '-'*80
+        aout.write('\tCount:\t%s\n' % len(fx.keys()))
+        aout.write('\tMean:\t%s\n' % f_avg)
+        aout.write('\tMin:\t%s\n' % f_min)
+        aout.write('\tMax:\t%s\n' % f_max)
         aout.write('Animals with non-zero genomic CoI:\n')
         aout.write('%s\n' % line)
-        aout.write('\tCount:\t%s\n'%f_nonzero_count)
-        aout.write('\tMean:\t%s\n'%f_nonzero_avg)
-        aout.write('\tMin:\t%s\n'%f_nonzero_min)
-        aout.write('\tMax:\t%s\n'%f_nonzero_max)
+        aout.write('\tCount:\t%s\n' % f_nonzero_count)
+        aout.write('\tMean:\t%s\n' % f_nonzero_avg)
+        aout.write('\tMin:\t%s\n' % f_nonzero_min)
+        aout.write('\tMax:\t%s\n' % f_nonzero_max)
         aout.close()
 
         pedobj.kw['g_computed'] = 1
-        out_dict = {}
-        out_dict['metadata'] = metadata
-        out_dict['fx'] = fx
+        out_dict = {
+            'metadata': metadata,
+            'fx': fx,
+        }
         if rels:
             return out_dict, rel_dict
         else:
             return out_dict
+
 
 ##
 # compute_genomic_homozygosity_from_snp() calculates genomic homozygosity for each SNP genotype as the proportion
@@ -485,7 +492,7 @@ def compute_genomic_homozygosity_from_snp(pedobj, update_pedigree=True, output=T
 
     if pedobj.snp.empty:
         if pedobj.kw['debug_messages'] == 1:
-            print '[ERROR]: There are no SNP data associated with this pedigree so no calculations can be performed!'
+            print('[ERROR]: There are no SNP data associated with this pedigree so no calculations can be performed!')
         logging.error('There are no SNP data associated with this pedigree so no calculations can be performed!')
         return False
     else:
@@ -493,18 +500,19 @@ def compute_genomic_homozygosity_from_snp(pedobj, update_pedigree=True, output=T
             logging.warning('pyp_snp/compute_genomic_homozygosity_from_snp(): There are different numbers of SNP '
                             'genotypes and animals in the pedigree file, which can lead to errors in matching '
                             'genomic relationships and coefficients of inbreeding!')
-            print '[WARNING]: pyp_snp/compute_genomic_homozygosity_from_snp(): There are different numbers of SNP ' \
-                  'genotypes and animals in the pedigree file, which can lead to errors in matching genomic ' \
-                  'relationships and coefficients of inbreeding!'
+            print('[WARNING]: pyp_snp/compute_genomic_homozygosity_from_snp(): There are different numbers of SNP '
+                  'genotypes and animals in the pedigree file, which can lead to errors in matching genomic '
+                  'relationships and coefficients of inbreeding!')
 
         if pedobj.kw['debug_messages'] == 1:
-            print '[INFO]: pyp_snp/compute_genomic_homozygosity_from_snp(): Renumbering animal IDs in the SNP dataframe.'
+            print('[INFO]: pyp_snp/compute_genomic_homozygosity_from_snp(): Renumbering animal IDs in the SNP '
+                  'dataframe.')
         logging.info('pyp_snp/compute_genomic_homozygosity_from_snp(): Renumbering animal IDs in the SNP dataframe')
     # We count the 1s, which are the heterozygotes, so we need to subtract that from 1. to get the frequency of the
     # homozygous loci.
     for p in pedobj.pedigree:
-        fx[p.animalID] = 1. - float(pedobj.snp[pedobj.snp['animalID'] == p.animalID]['genotype'].values[0].count('1')) / \
-                         float(len(pedobj.snp[pedobj.snp['animalID'] == p.animalID]['genotype'].values[0]))
+        fx[p.animalID] = (1.-float(pedobj.snp[pedobj.snp['animalID'] == p.animalID]['genotype'].values[0].count('1')) /
+                          float(len(pedobj.snp[pedobj.snp['animalID'] == p.animalID]['genotype'].values[0])))
 
     # Write summary statistics to a file.
     if output:
@@ -522,7 +530,7 @@ def compute_genomic_homozygosity_from_snp(pedobj, update_pedigree=True, output=T
     f_sum = 0.0
     f_min = 999.0
     f_max = -999.0
-    for k, v in fx.iteritems():
+    for k, v in fx. items():
         if output:
             if 'ASD' in pedobj.kw['pedformat']:
                 aout.write('%s\t%s\t%s\n'%(pedobj.pedigree[int(k)-1].name, k, v))
@@ -545,30 +553,32 @@ def compute_genomic_homozygosity_from_snp(pedobj, update_pedigree=True, output=T
         f_avg = f_sum / len(fx.keys())
         f_rng = f_max - f_min
     # Summary statistics including all genomic CoI
-    metadata = {}
-    metadata['f_count'] = len(fx.keys())
-    metadata['f_sum'] = f_sum
-    metadata['f_min'] = f_min
-    metadata['f_max'] = f_max
-    metadata['f_rng'] = f_rng
-    metadata['f_avg'] = f_avg
+    metadata = {
+        'f_count': len(fx.keys()),
+        'f_sum': f_sum,
+        'f_min': f_min,
+        'f_max': f_max,
+        'f_rng': f_rng,
+        'f_avg': f_avg,
+    }
     # Prepare the output
     if output:
         line = '='*80
         aout.write('%s\n' % line)
         aout.write('Genomic Homozygosity Statistics\n')
-        line = '-'*80
         aout.write('All animals:\n')
         aout.write('%s\n' % line)
-        aout.write('\tCount:\t%s\n'%len(fx.keys()))
-        aout.write('\tMean:\t%s\n'%f_avg)
-        aout.write('\tMin:\t%s\n'%f_min)
-        aout.write('\tMax:\t%s\n'%f_max)
+        aout.write('\tCount:\t%s\n' % len(fx.keys()))
+        aout.write('\tMean:\t%s\n' % f_avg)
+        aout.write('\tMin:\t%s\n' % f_min)
+        aout.write('\tMax:\t%s\n' % f_max)
         aout.close()
-        out_dict = {}
-        out_dict['metadata'] = metadata
-        out_dict['fx'] = fx
+        out_dict = {
+            'metadata': metadata,
+            'fx': fx,
+        }
         return out_dict
+
 
 ##
 # compute_genomic_homozygosity_from_snp() calculates genomic homozygosity for each SNP genotype as the proportion
@@ -586,17 +596,18 @@ def renumber_snp_ids(pedobj):
     #if pedobj.snp.empty:
     if pedobj.snp:
         if pedobj.kw['debug_messages'] == 1:
-            print '[INFO]: pyp_snp/renumber_snp_ids(): Renumbering animal IDs in the SNP dataframe.'
+            print('[INFO]: pyp_snp/renumber_snp_ids(): Renumbering animal IDs in the SNP dataframe.')
         logging.info('pyp_snp/renumber_snp_ids(): Renumbering animal IDs in the SNP dataframe')
         for p in pedobj.pedigree:
             pedobj.snp.loc[:, ['animalID']].replace(to_replace=p.originalID, value=p.animalID, inplace=True)
     else:
         if pedobj.kw['debug_messages'] == 1:
-            print '[ERROR]: pyp_snp/renumber_snp_ids(): There are no SNP data associated with this pedigree so no ' \
-                  'IDs need to be renumbered.'
+            print('[ERROR]: pyp_snp/renumber_snp_ids(): There are no SNP data associated with this pedigree so no ' \
+                  'IDs need to be renumbered.')
         logging.error('pyp_snp/renumber_snp_ids(): There are no SNP data associated with this pedigree so no IDs '
                       'need to be renumbered.')
     return
+
 
 ##
 # generate_random_genotype() generates a random string of 0s, 1, and 2s. The resulting sting has no actual
@@ -604,5 +615,9 @@ def renumber_snp_ids(pedobj):
 # @param string_length The length of the strength to generate.
 # @retval A string of length <string_length> made up of 0s, 1s, and 2s.
 def generate_random_genotype(string_length):
-    random_genotype = ''.join([random.choice(['0', '1', '2']) for i in xrange(string_length)])
+    """
+    enerate_random_genotype() generates a random string of 0s, 1, and 2s. The resulting sting has no actual
+    genealogical significance -- it's just a random string for use as simple test data!
+    """
+    random_genotype = ''.join([random.choice(['0', '1', '2']) for i in range(string_length)])
     return random_genotype

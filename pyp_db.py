@@ -17,7 +17,11 @@
 ## @package pyp_db
 # pyp_db contains a set of procedures used to create, modify, and query pedigrees stored in relational databases.
 
-import logging, math, os, string, sys
+import logging
+import math
+import os
+import string
+import sys
 from . import pyp_io
 from . import pyp_nrm
 from . import pyp_utils
@@ -27,6 +31,7 @@ try:
 except ImportError:
     print('[ERRROR]: Unable to import pyDAL in pyp_db.py!')
     logging.error('Unable to import pyDAL in pyp_db.py!')
+
 
 ##
 # connectToDatabase() opens a connection to a user-specified database.

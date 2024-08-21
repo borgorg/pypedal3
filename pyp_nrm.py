@@ -40,7 +40,7 @@ import time
 try:
     from pysparse import spmatrix
 except ImportError:
-    #logging.info('Could not import the spmatrix module from PySparse! Using NumPy dense matrices instead.')
+    # logging.info('Could not import the spmatrix module from PySparse! Using NumPy dense matrices instead.')
     print('[INFO]: Could not import the spmatrix module from PySparse in pyp_nrm! NumPy dense matrices will be used instead.')
 from . import pyp_utils
 

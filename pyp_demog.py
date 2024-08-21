@@ -2,21 +2,23 @@
 
 ###############################################################################
 # NAME: pyp_demog.py
-# VERSION: 2.0.0 (29SEPTEMBER2010)
-# AUTHOR: John B. Cole, PhD (john.cole@ars.usda.gov)
+# VERSION: 3.0.0 (21AUGUST2024)
+# AUTHOR: John B. Cole, PhD (john.b.cole@gmail.com)
 # LICENSE: LGPL
 ###############################################################################
 # FUNCTIONS:
 #     set_base_year()
 #     set_age_units()
+#     set_sex_codes()
 #     age_distribution()
 #     sex_ratio()
 #     founders_by_year()
 ###############################################################################
 
 ## @package pyp_demog
-# pyp_demog contains a set of procedures for demographic calculations on the
-# population describe in a pedigree.
+# pyp_snp contains several procedures for working with demographic data.
+##
+
 
 from . import pyp_utils
 
@@ -25,9 +27,7 @@ from . import pyp_utils
 global BASE_DEMOGRAPHIC_YEAR
 global BASE_DEMOGRAPHIC_UNIT
 global SEX_CODE_MAP
-BASE_DEMOGRAPHIC_YEAR = 1900
-BASE_DEMOGRAPHIC_UNIT = 'year'
-SEX_CODE_MAP = {'m':'Male','f':'Female','u':'Unk'}
+
 
 ##
 # set_base_year() defines a global variable, BASE_DEMOGRAPHIC_YEAR.
@@ -40,6 +40,7 @@ def set_base_year(year=1900):
     global BASE_DEMOGRAPHIC_YEAR
     BASE_DEMOGRAPHIC_YEAR = year
 
+
 ##
 # set_age_units() defines a global variable, BASE_DEMOGRAPHIC_UNIT.
 # @param units The base unit for age computations ('year'|'month'|'day').
@@ -48,12 +49,28 @@ def set_age_units(units='year'):
     """
     set_age_units() defines a global variable, BASE_DEMOGRAPHIC_UNIT.
     """
-    _units = ['year','month','day']
+    _units = ['year', 'month', 'day']
     global BASE_DEMOGRAPHIC_UNIT
     if units in _units:
         BASE_DEMOGRAPHIC_UNIT = units
     else:
         BASE_DEMOGRAPHIC_UNIT = 'year'
+
+
+##
+# set_sex_codes() defines a global dictionary, SEX_CODE_MAP, which maps one-character sex codes to descriptive strings.
+# @param None
+# @retval None
+def set_sex_codes():
+    """
+    set_sex_codes() defines a global dictionary, SEX_CODE_MAP, which maps one-character sex codes to descriptive
+    strings.
+    """
+    global SEX_CODE_MAP
+    SEX_CODE_MAP = {'m': 'Male',
+                    'f': 'Female',
+                    'u': 'Unk'}
+
 
 ##
 # age_distribution() computes histograms of the age distribution of
@@ -88,8 +105,9 @@ def age_distribution(pedobj,sex=1):
             print('\tAge\tCount\tFrequency\tHistogram')
             for key in list(age_dict.keys()):
                 age_freq_total = age_freq_total + float(age_dict[key])/float(len(pedobj.pedigree))
-                print('\t%s\t%s\t%s\t%s' % (key,age_dict[key],float(age_dict[key])/float(len(pedobj.pedigree)),age_hist[key]))
-            print('\tTOTAL\t%s\t%s' % (len(pedobj.pedigree),age_freq_total))
+                print('\t%s\t%s\t%s\t%s' % (key, age_dict[key], float(age_dict[key])/float(len(pedobj.pedigree)),
+                                            age_hist[key]))
+            print('\tTOTAL\t%s\t%s' % (len(pedobj.pedigree), age_freq_total))
             print('-'*80)
     else:
         males = []
@@ -132,25 +150,29 @@ def age_distribution(pedobj,sex=1):
             print('\tAge\tCount\tFrequency\tHistogram')
             for key in list(male_dict.keys()):
                 age_freq_total = age_freq_total + float(male_dict[key])/float(len(males))
-                print('\t%s\t%s\t%s\t%s' % (key,male_dict[key],float(male_dict[key])/float(len(males)),male_hist[key]))
-            print('\tTOTAL\t%s\t%s' % (len(males),age_freq_total))
+                print('\t%s\t%s\t%s\t%s' % (key, male_dict[key], float(male_dict[key])/float(len(males)),
+                                            male_hist[key]))
+            print('\tTOTAL\t%s\t%s' % (len(males), age_freq_total))
             print('-'*80)
             age_freq_total = 0.0
             print('Females')
             print('\tAge\tCount\tFrequency\tHistogram')
             for key in list(female_dict.keys()):
                 age_freq_total = age_freq_total + float(female_dict[key])/float(len(females))
-                print('\t%s\t%s\t%s\t%s' % (key,female_dict[key],float(female_dict[key])/float(len(females)),female_hist[key]))
-            print('\tTOTAL\t%s\t%s' % (len(females),age_freq_total))
+                print('\t%s\t%s\t%s\t%s' % (key, female_dict[key], float(female_dict[key])/float(len(females)),
+                                            female_hist[key]))
+            print('\tTOTAL\t%s\t%s' % (len(females), age_freq_total))
             print('-'*80)
             age_freq_total = 0.0
             print('Unknowns')
             print('\tAge\tCount\tFrequency\tHistogram')
             for key in list(unknown_dict.keys()):
                 age_freq_total = age_freq_total + float(unknown_dict[key])/float(len(unknowns))
-                print('\t%s\t%s\t%s\t%s' % (key,unknown_dict[key],float(unknown_dict[key])/float(len(unknowns)),unknown_hist[key]))
-            print('\tTOTAL\t%s\t%s' % (len(unknowns),age_freq_total))
+                print('\t%s\t%s\t%s\t%s' % (key, unknown_dict[key], float(unknown_dict[key])/float(len(unknowns)),
+                                            unknown_hist[key]))
+            print('\tTOTAL\t%s\t%s' % (len(unknowns), age_freq_total))
             print('-'*80)
+
 
 ##
 # sex_ratio() returns a dictionary containing the proportion of males and females in the population.
@@ -176,7 +198,8 @@ def sex_ratio(pedobj):
         print('(n = %s)' % (len(pedobj.pedigree)))
         print('Sex\tCount\tFrequency')
         for s in list(sexratiodict.keys()):
-            print('%s:\t%s\t%s' % (SEX_CODE_MAP[s],sexratiodict[s],float(sexratiodict[s])/float(len(pedobj.pedigree))))
+            print('%s:\t%s\t%s' % (SEX_CODE_MAP[s], sexratiodict[s],
+                                   float(sexratiodict[s])/float(len(pedobj.pedigree))))
         print('-'*80)
         if int(sexratiodict['u']) > 0:
             marginal = sexratiodict['m'] + sexratiodict['f']
@@ -184,9 +207,10 @@ def sex_ratio(pedobj):
             print('-'*80)
             print('(n = %s)' % (marginal))
             print('Sex\tCount\tFrequency')
-            print('%s:\t%s\t%s' % (SEX_CODE_MAP['m'],sexratiodict['m'],float(sexratiodict['m'])/marginal))
-            print('%s:\t%s\t%s' % (SEX_CODE_MAP['f'],sexratiodict['f'],float(sexratiodict['f'])/marginal))
+            print('%s:\t%s\t%s' % (SEX_CODE_MAP['m'], sexratiodict['m'], float(sexratiodict['m'])/marginal))
+            print('%s:\t%s\t%s' % (SEX_CODE_MAP['f'], sexratiodict['f'], float(sexratiodict['f'])/marginal))
     return sexratiodict
+
 
 ##
 # founders_by_year() returns a dictionary containing the number of founders in each
@@ -206,21 +230,21 @@ def founders_by_year(pedobj):
     else:
         for _f in pedobj.metadata.unique_founder_list:
             _by = pedobj.pedigree[int(_f)-1].by
-            #print _by
+            # print _by
             try:
                 founderbyyeardict[_by] = founderbyyeardict[_by] + 1
             except KeyError:
                 founderbyyeardict[_by] = 1
     # If the dictionary has more than one birthyear in it we should iterate through the list
     # to fill in any gaps in years.  This will make downstream graphing much easier.
-    #print founderbyyeardict.keys()
+    # print founderbyyeardict.keys()
     _years = list(founderbyyeardict.keys())
     _years.sort()
-    #print _years
-    for _f in range(_years[0],_years[-1]):
+    # print _years
+    for _f in range(_years[0], _years[-1]):
         try:
             _c = founderbyyeardict[_f]
         except KeyError:
             founderbyyeardict[_f] = 0
-    #print founderbyyeardict
+    # print founderbyyeardict
     return founderbyyeardict
