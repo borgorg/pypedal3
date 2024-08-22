@@ -36,6 +36,7 @@ import copy
 import datetime
 import logging
 import numpy
+import os
 import subprocess
 import time
 try:
@@ -43,6 +44,7 @@ try:
 except ImportError:
     logging.info('pyp_nrm couldn\'t import the scipy.sparse module! Using NumPy dense matrices instead.')
     print('[INFO]: pyp_nrm couldn\'t import the scipy.sparse module! Using NumPy dense matrices instead.')
+from . import pyp_network
 from . import pyp_utils
 
 
@@ -137,7 +139,6 @@ def a_matrix(pedobj, save=False):
 # @param debug Print NRM for debugging
 # @param fill Fill both the upper and lower off-diagonals when 1, only the upper otherwise.
 # @retval The NRM as Numarray matrix.
-#@profile
 def fast_a_matrix(pedigree, pedopts, save=0, method='dense', debug=0, fill=1):
     """
     Form a numerator relationship matrix from a pedigree.  fast_a_matrix() is a hacked
@@ -442,6 +443,7 @@ def fast_a_matrix_r(pedigree, pedopts, save=0, method='dense'):
     #except: pass
     return a
 
+
 ##
 # inbreeding() is a proxy function used to dispatch pedigrees to the appropriate
 # function for computing CoI.  By default, small pedigrees < 10,000 animals) are
@@ -449,13 +451,13 @@ def fast_a_matrix_r(pedigree, pedopts, save=0, method='dense'):
 # the recursive method of VanRaden (1992) is used.
 # @param pedobj A PyPedal pedigree object.
 # @param method Keyword indicating which method of computing CoI should be used (tabular|vanraden).
-# @param gens The number of generations from the pedigree to be used for calculating CoI.  By default, gens=0, which uses the complete pedigree.
+# @param gens The number of generations from the pedigree to be used for calculating CoI. By default, gens=0, which
+#             uses the complete pedigree.
 # @param rels Flag indicating whether or not summary statistics should be computed for coefficients of relationship.
 # @param output Flag indicating whether or not output files should be written.
 # @param amethod The method parameter used by Aguilar's INBUPGF90 program.
 # @param force Flag to override use of NRM attached to pedigree for finding COI (0: use NRM, 1: ignore NRM)
 # @retval A dictionary of CoI keyed to renumbered animal IDs.
-#@profile
 def inbreeding(pedobj, method='tabular', gens=0, rels=0, output=1, force=0, amethod=3):
     """
     inbreeding() is a proxy function used to dispatch pedigrees to the appropriate
@@ -463,52 +465,52 @@ def inbreeding(pedobj, method='tabular', gens=0, rels=0, output=1, force=0, amet
     processed with the tabular method directly.  For larger pedigrees, or if requested,
     the recursive method of VanRaden (1992) is used.
     """
-    try: logging.info('Entered inbreeding()')
-    except: pass
+    logging.info('Entered pyp_nrm/inbreeding().')
+
     fx = {}
     metadata = {}
     if method not in ['vanraden', 'tabular', 'meu_luo', 'mod_meu_luo', 'aguilar']:
-        try: logging.warning('You passed an unrecognized method, %s, to pyp_nrm/inbreeding(); the method was changed to the default of \'tabular\'.', method)
-        except: pass
+        logging.warning('You passed an unrecognized method, %s, to pyp_nrm/inbreeding(); the method was '
+                             'changed to the default of \'tabular\'.', method)
         method = 'tabular'
     if int(gens) < 0:
-        try: logging.warning('You passed an invalid value of gens, %s, to pyp_nrm/inbreeding(); gens was changed to the default of 0.', gens)
-        except: pass
+        logging.warning('You passed an invalid value of gens, %s, to pyp_nrm/inbreeding(); gens was changed '
+                             'to the default of 0.', gens)
         gens = 0
 
     if rels:
-        rel_dict = {}
-        #rel_dict['r_count'] = 0
-        rel_dict['r_count'] = (pedobj.metadata.num_records*(pedobj.metadata.num_records+1))/2
-        rel_dict['r_nonzero_count'] = 0
-        rel_dict['r_min'] = 0.
-        rel_dict['r_max'] = 0.
-        rel_dict['r_rng'] = 0.
-        rel_dict['r_avg'] = 0.
-        rel_dict['r_nonzero_avg'] = 0.
-        rel_dict['r_sum'] = 0.
-        rel_dict['r_nonzero_sum'] = 0.
+        rel_dict = {
+            'r_count': (pedobj.metadata.num_records*(pedobj.metadata.num_records+1))/2,
+            'r_nonzero_count': 0,
+            'r_min': 0.,
+            'r_max': 0.,
+            'r_rng': 0.,
+            'r_avg': 0.,
+            'r_nonzero_avg': 0.,
+            'r_sum': 0.,
+            'r_nonzero_sum': 0.,
+        }
 
-        reldict = {}
-        reldict['r_count'] = 0
-        reldict['r_nonzero_count'] = 0
-        reldict['r_nonzero_sum'] = 0.
-        reldict['r_max'] = 0.
-        reldict['r_min'] = 1.
-        reldict['r_sum'] = 0.
+        reldict = {
+            'r_count': 0,
+            'r_nonzero_count': 0,
+            'r_nonzero_sum': 0.,
+            'r_max': 0.,
+            'r_min': 1.,
+            'r_sum': 0.,
+        }
 
-    # If the user has already computed the NRM for this pedigree we will use it
-    # to get the COI rather than recompute it all over again.
+    # If the user has already computed the NRM for this pedigree we will use it to get the COI rather than recompute
+    # it all over again.
     if pedobj.kw['form_nrm'] and pedobj.nrm.nrm.shape[0] == pedobj.metadata.num_records and force == 0:
-        try: logging.info('pyp_nrm/inbreeding() is using the NRM attached to the pedigree to get COI.')
-        except: pass
+        logging.info('pyp_nrm/inbreeding() is using the NRM attached to the pedigree to get COI.')
         for _i in range(pedobj.metadata.num_records):
             fx[pedobj.pedigree[_i].animalID] = pedobj.nrm.nrm[_i][_i] - 1.
-        if rels == 1:
+        if rels:
             n = pedobj.nrm.nrm.shape[0]
-            reldict['r_count'] = ( n * ( n + 1 ) ) / 2
+            reldict['r_count'] = (n *(n + 1)) / 2
             for i in range(n):
-                for j in range (i, n):
+                for j in range(i, n):
                     if i != j:
                         if pedobj.nrm.nrm[i][j] > 0.:
                             reldict['r_nonzero_count'] = \
@@ -520,43 +522,45 @@ def inbreeding(pedobj, method='tabular', gens=0, rels=0, output=1, force=0, amet
                             if pedobj.nrm.nrm[i][j] < reldict['r_min']:
                                 reldict['r_min'] = pedobj.nrm.nrm[i][j]
                         reldict['r_sum'] = reldict['r_sum'] + pedobj.nrm.nrm[i][j]
-            #print '[DEBUG]: reldict: ', reldict
+            # print('[DEBUG]: reldict: ', reldict)
     else:
         if method == 'vanraden':# or pedobj.metadata.num_records > 1000:
             #if pedobj.metadata.num_records > 1000:
-            #    try: logging.warning('pyp_nrm.inbreeding() dispatched the pedigree %s to pyp_nrm/inbreeding_vanraden() because it contains more than 1000 records.', pedobj.kw['pedname'])
-            #    except: pass
+            # logging.warning('pyp_nrm.inbreeding() dispatched the pedigree %s to pyp_nrm/inbreeding_vanraden()
+            #                  because it contains more than 1000 records.', pedobj.kw['pedname'])
             if rels:
                 fx, reldict = inbreeding_vanraden(pedobj, gens=gens, rels=rels)
-                #print '[DEBUG]: reldict: ', reldict
+                # print('[DEBUG]: reldict: ', reldict)
             else:
                 fx = inbreeding_vanraden(pedobj, gens=gens)
         elif method == 'meu_luo':
             if rels != 0:
-                logging.warning('You asked pyp_nrm.inbreeding() to compute relationships as well as inbreeding, but requested method %s, which does not provide coefficients of relationship. Only coefficients of inbreeding will be returned.', method)
+                logging.warning('You asked pyp_nrm.inbreeding() to compute relationships as well as inbreeding, '
+                                'but requested method %s, which does not provide coefficients of relationship. Only '
+                                'coefficients of inbreeding will be returned.', method)
             fx = inbreeding_meuwissen_luo(pedobj, gens=gens, rels=rels)
         elif method == 'mod_meu_luo':
             if rels != 0:
-                logging.warning('You asked pyp_nrm.inbreeding() to compute relationships as well as inbreeding, but requested method %s, which does not provide coefficients of relationship. Only coefficients of inbreeding will be returned.', method)
+                logging.warning('You asked pyp_nrm.inbreeding() to compute relationships as well as inbreeding, '
+                                'but requested method %s, which does not provide coefficients of relationship. Only '
+                                'coefficients of inbreeding will be returned.', method)
             fx = inbreeding_modified_meuwissen_luo(pedobj, gens=gens, rels=rels)
         elif method == 'aguilar':
-            try: logging.info('Using the INBUPGF90 program to compute inbreeding with method %s.' % amethod)
-            except: pass
+            logging.info('Using the INBUPGF90 program to compute inbreeding with method %s.' % amethod)
             fx = inbreeding_aguilar(pedobj, amethod)
         else:
             if rels:
                 fx, reldict = inbreeding_tabular(pedobj, gens=gens, rels=rels)
-                #print '[DEBUG]: reldict: ', reldict
+                # print('[DEBUG]: reldict: ', reldict)
             else:
                 fx = inbreeding_tabular(pedobj, gens=gens)
     # Write summary stats to a file.
     if output:
-        a_outputfile = '%s%s%s' % (pedobj.kw['filetag'],'_inbreeding','.dat')
-        aout = open(a_outputfile,'w')
+        a_outputfile = '%s%s%s' % (pedobj.kw['filetag'], '_inbreeding', '.dat')
+        aout = open(a_outputfile, 'w')
         aout.write('# Inbreeding coefficients\n')
-        # If the pedigree uses names do the same in the output file because
-        # the original IDs won't mean anything when compared to the input
-        # pedugree.
+        # If the pedigree uses names do the same in the output file because the original IDs won't mean anything
+        # when compared to the input pedigree.
         if 'ASD' in pedobj.kw['pedformat']:
             aout.write('# Name\tRenum ID\tf_x\n')
         else:
@@ -571,9 +575,9 @@ def inbreeding(pedobj, method='tabular', gens=0, rels=0, output=1, force=0, amet
     for k, v in fx.items():
         if output:
             if 'ASD' in pedobj.kw['pedformat']:
-                aout.write('%s\t%s\t%s\n'%(pedobj.pedigree[int(k)-1].name,k,v))
+                aout.write('%s\t%s\t%s\n' % (pedobj.pedigree[int(k)-1].name, k, v))
             else:
-                aout.write('%s\t%s\t%s\n'%(pedobj.pedigree[int(k)-1].originalID,k,v))
+                aout.write('%s\t%s\t%s\n' % (pedobj.pedigree[int(k)-1].originalID, k, v))
         # Update self.fa for each Animal object in the pedigree.
         pedobj.pedigree[int(k)-1].fa = v
         f_sum = f_sum + v
@@ -625,7 +629,8 @@ def inbreeding(pedobj, method='tabular', gens=0, rels=0, output=1, force=0, amet
     metadata['nonzero']['f_avg'] = f_nonzero_avg
 
     if rels:
-	if pedobj.kw['debug_messages'] == 1: print('[DEBUG]: reldict: ', reldict)
+        if pedobj.kw['debug_messages']:
+            print('[DEBUG]: reldict: ', reldict)
         if reldict['r_count'] > 0:
             if reldict['r_min'] < rel_dict['r_min']:
                 rel_dict['r_min'] = reldict['r_min']
@@ -638,7 +643,7 @@ def inbreeding(pedobj, method='tabular', gens=0, rels=0, output=1, force=0, amet
             rel_dict['r_nonzero_count'] = reldict['r_nonzero_count'] + rel_dict['r_nonzero_count']
             rel_dict['r_nonzero_sum'] = rel_dict['r_nonzero_sum'] + reldict['r_nonzero_sum']
             rel_dict['r_nonzero_avg'] = rel_dict['r_nonzero_sum'] / rel_dict['r_nonzero_count']
-        #print '\n\nrel_dct: %s\n\n' % ( rel_dict )
+        # print('\n\nrel_dct: %s\n\n' % rel_dict)
 
     if output:
         line = '='*80
@@ -660,17 +665,18 @@ def inbreeding(pedobj, method='tabular', gens=0, rels=0, output=1, force=0, amet
         aout.write('\tMax:\t%s\n'%f_nonzero_max)
         aout.close()
 
-    try: logging.info('Exited inbreeding()')
-    except: pass
+    logging.info('Exited pyp_nrm/inbreeding()')
 
     pedobj.kw['f_computed'] = 1
-    out_dict = {}
-    out_dict['metadata'] = metadata
-    out_dict['fx'] = fx
+    out_dict = {
+        'metadata': metadata,
+        'fx': fx,
+    }
     if rels:
         return out_dict, rel_dict
     else:
         return out_dict
+
 
 ##
 # inbreeding_vanraden() uses VanRaden's (1992) method for computing coefficients of
@@ -685,43 +691,40 @@ def inbreeding(pedobj, method='tabular', gens=0, rels=0, output=1, force=0, amet
 #       pedigrees and fastest for the later pedigrees.
 # @param pedobj A PyPedal pedigree object.
 # @param cleanmaps Flag to denote whether or not subpedigree ID maps should be deleted after they are used (0|1).
-# @param gens The number of generations from the pedigree to be used for calculating CoI.  By default, gens=0, which uses the complete pedigree.
+# @param gens The number of generations from the pedigree to be used for calculating CoI.  By default, gens=0, which
+#             uses the complete pedigree.
 # @param rels Flag indicating whether or not summary statistics should be computed for coefficients of relationship.
 # @retval A dictionary of CoI keyed to renumbered animal IDs
 # @profile
 def inbreeding_vanraden(pedobj, cleanmaps=1, gens=0, rels=0):
     """
-    inbreeding_vanraden() uses VanRaden's (1992) method for computing coefficients of
-    inbreeding in a large pedigree.  The method works as follows:
-    1.  Take a large pedigree and order it from youngest animal to oldest (n, n-1, ...,
-        1);
+    inbreeding_vanraden() uses VanRaden's (1992) method for computing coefficients of inbreeding in a large pedigree.
+    The method works as follows:
+    1.  Take a large pedigree and order it from youngest animal to oldest (n, n-1, ..., 1);
     2.  Recurse through the pedigree to find all of the ancestors of that animal n;
     3.  Reorder and renumber that "subpedigree";
-    4.  Compute coefficients of inbreeding for that "subpedigree" using the tabular
-        method (Emik and Terrill, 1949);
+    4.  Compute coefficients of inbreeding for that "subpedigree" using the tabular method (Emik and Terrill, 1949);
     5.  Put the coefficients of inbreeding in a dictionary;
-    6.  Repeat 2 - 5 for animals n-1 through 1; the process is slowest for the early
-        pedigrees and fastest for the later pedigrees.
+    6.  Repeat 2 - 5 for animals n-1 through 1; the process is slowest for the earlypedigrees and fastest for the
+        later pedigrees.
     """
-    try: logging.info('Entered inbreeding_vanraden()')
-    except: pass
+    logging.info('Entered pyp_nrm/inbreeding_vanraden()')
 
-    #print 'Entered inbreeding_vanraden()'
-    #print '\tConverting pedigree to graph.'
-    from PyPedal import pyp_network
-    # Using pyp_network.ped_to_graph() instead of pyp_nrm.recurse_pedigree()
-    # provides a gain in performance of at least an order of magnitude.
+    # print('Entered inbreeding_vanraden()')
+    # print('\tConverting pedigree to graph.')
+    # Using pyp_network.ped_to_graph() instead of pyp_nrm.recurse_pedigree() provides a gain in performance of at
+    # least an order of magnitude.
     ng = pyp_network.ped_to_graph(pedobj)
 
     _ped = []       # This is a temporary pedigree
     top_ped = []
 
     if int(gens) > 0:
-#         print 'gens: %s' % ( gens )
+        # print('gens: %s' % gens)
         top_peddict = pyp_network.find_ancestors_g(ng, len(pedobj.idmap), {}, gens)
         top_peddict[len(pedobj.idmap)] = 1
         top_ped = list(top_peddict.keys())
-        #print 'top_ped: ', top_ped
+        # print('top_ped: ', top_ped)
         top_r = []
         _anids = []
         for _j in top_ped:
@@ -740,7 +743,7 @@ def inbreeding_vanraden(pedobj, cleanmaps=1, gens=0, rels=0):
 
     fx = {}         # This will hold our coefficients of inbreeding
     _parents = {}   # Stores a list of sire-dam pairs along with the youngest offspring
-                    # of that pair.  Used as a lookup table to avoid lots of redundant
+                    # of that pair. Used as a lookup table to avoid lots of redundant
                     # calculations for full-sibs.
     _anids.sort()       # sort from oldest to youngest
     _anids.reverse()    # reverse the list to put the youngest animals first
@@ -748,61 +751,58 @@ def inbreeding_vanraden(pedobj, cleanmaps=1, gens=0, rels=0):
     _cum_f_counter = 0
     _vanraden_round = 0
     _cum_pct_proc = 0.
-    _related = {}   # Dictionary for looking-up animals with non-zero
-                    # relationships.
+    _related = {}       # Dictionary for looking-up animals with non-zero relationships.
 
     # If the user wants summary stats on coefficients of relationship,
     # prepare the dictionary, counters, and accumulators.
     if rels:
-        reldict = {}
-        reldict['r_count'] = 0
-        reldict['r_nonzero_count'] = 0
-        reldict['r_nonzero_sum'] = 0.
-        reldict['r_max'] = 0.
-        reldict['r_min'] = 1.
-        reldict['r_sum'] = 0.
-        #print '[DEBUG]: inbreeding_vanraden(): reldict: ', reldict
-    #print '_anids: ', _anids
+        reldict = {
+            'r_count': 0,
+            'r_nonzero_count': 0,
+            'r_nonzero_sum': 0.,
+            'r_max': 0.,
+            'r_min': 1.,
+            'r_sum': 0.,
+        }
+        # print('[DEBUG]: inbreeding_vanraden(): reldict: ', reldict)
+
+    # print('_anids: ', _anids)
 
     for i in _anids:
-        #print '\t_anid: ', i
+        # print('\t_anid: ', i)
         if int(gens) == 0:
-            _parent_key = '%s_%s' % ( pedobj.pedigree[int(i)-1].sireID,
-                pedobj.pedigree[int(i)-1].damID )
+            _parent_key = '%s_%s' % (pedobj.pedigree[int(i)-1].sireID, pedobj.pedigree[int(i)-1].damID)
         else:
-            _parent_key = '%s_%s' % ( top_r[top_peddict[int(i)]].sireID, top_r[top_peddict[int(i)]].damID )
+            _parent_key = '%s_%s' % (top_r[top_peddict[int(i)]].sireID, top_r[top_peddict[int(i)]].damID)
         try:
-            _k = fx[i]  # If an exception is thrown, an animal is not in the
-                        # dictionary yet.
+            _k = fx[i]  # If an exception is thrown, an animal is not in the dictionary yet.
         except KeyError:
             try:
                 # If the parental combination has been seen already then we
                 # already know the COI of the mating and do not need to do
                 # the calculations again.
-                #print '_parent_key: ', _parent_key
-                #print 'fx[_parents[_parent_key]]: ', fx[_parents[_parent_key]]
+                # print('_parent_key: ', _parent_key)
+                # print('fx[_parents[_parent_key]]: ', fx[_parents[_parent_key]])
                 fx[i] = fx[_parents[_parent_key]]
             except:
-                #print '\tAnimal %s not in inbreeding dict' % ( i )
+                # print('\tAnimal %s not in inbreeding dict' % i)
                 _f_counter = 0
                 _vanraden_round = _vanraden_round + 1
                 if _vanraden_round == 1:
-                    try: logging.info('Starting round %s of pyp_nrm/inbreeding_vanraden().', _vanraden_round)
-                    except: pass
-                _tag = '%s_%s' % (pedobj.kw['filetag'],i)
+                    logging.info('Starting round %s of pyp_nrm/inbreeding_vanraden().', _vanraden_round)
+                _tag = '%s_%s' % (pedobj.kw['filetag'], i)
                 if int(gens) > 0:
                     _ped = top_peddict
                 else:
                     _ped = pyp_network.find_ancestors(ng, i, [])
                     _ped.append(i)
-                #print 'ped len: %d' % ( len(_ped) )
-                #print 'ped: %s' % ( _ped )
+                # print('ped len: %d' % len(_ped))
+                # print('ped: %s' % _ped)
                 if int(gens) > 0:
                     _r = top_r
                 else:
-                    _r = []     # This list will hold a copy of the objects in _ped
-                                # so that we can renumber animal i's pedigree without
-                                # changing the data in pedobj.pedigree.
+                    _r = []     # This list will hold a copy of the objects in _ped so that we can renumber animal
+                                # i's pedigree without changing the data in pedobj.pedigree.
                     _map = {}
                     for j in _ped:
                         # This is VERY important -- rather than append a reference
@@ -814,10 +814,11 @@ def inbreeding_vanraden(pedobj, cleanmaps=1, gens=0, rels=0):
                         _r.append(copy.copy(pedobj.pedigree[int(j)-1]))
                 # We also need to honor the slow_reorder option.
                 if pedobj.kw['slow_reorder']:
-                    _r = pyp_utils.reorder(_r,_tag)      # Reorder the pedigree
+                    _r = pyp_utils.reorder(_r, _tag)      # Reorder the pedigree
                 else:
-                    _r = pyp_utils.fast_reorder(_r,_tag)      # Reorder the pedigree
-                _s, _map = pyp_utils.renumber(_r,_tag, returnmap=1, debug=pedobj.kw['debug_messages'],animaltype=pedobj.kw['animal_type'])  # Renumber the pedigree
+                    _r = pyp_utils.fast_reorder(_r, _tag)      # Reorder the pedigree
+                _s, _map = pyp_utils.renumber(_r, _tag, returnmap=1, debug=pedobj.kw['debug_messages'],
+                                              animaltype=pedobj.kw['animal_type'])  # Renumber the pedigree
                 # _map maps IDs from original IDs to renumbered IDs.
                 # _backmap allows renumbered ID => original ID reverse lookups.
                 _backmap = {}
@@ -835,10 +836,10 @@ def inbreeding_vanraden(pedobj, cleanmaps=1, gens=0, rels=0):
                 # have r_xy >= 1. if we do not adjust the elements of A for parental in-
                 # breeding.
                 if pedobj.kw['nrm_method'] == 'nrm':
-                    _a = fast_a_matrix(_s,_opts,method=pedobj.kw['matrix_type'])     # Form the NRM w/the tabular method
+                    _a = fast_a_matrix(_s, _opts, method=pedobj.kw['matrix_type'])     # Form the NRM w/the tabular method
                 else:
-                    _a = fast_a_matrix_r(_s,_opts,method=pedobj.kw['matrix_type'])
-                #print 'len(_ped): ', len(_ped)
+                    _a = fast_a_matrix_r(_s, _opts, method=pedobj.kw['matrix_type'])
+                #print('len(_ped): ', len(_ped))
                 for j in range(len(_ped)):
                     _orig_id = _backmap[_s[j].animalID]
                     # The same animal can appear in many different pedigrees, but
@@ -850,23 +851,20 @@ def inbreeding_vanraden(pedobj, cleanmaps=1, gens=0, rels=0):
                     try:
                         _check = fx[_orig_id]
                     except KeyError:
-                        #print _a
+                        # print(_a)
                         fx[_orig_id] = _a[j][j] - 1.
                         _f_counter = _f_counter + 1
                     if rels:
                         for k in range(j, len(_ped)):
                             if j != k:
-                                _rxykey = '%s_%s' % (_backmap[_s[j].animalID], \
-                                    _backmap[_s[k].animalID])
+                                _rxykey = '%s_%s' % (_backmap[_s[j].animalID], _backmap[_s[k].animalID])
                                 if _a[j][k] > 0.:
                                     try:
                                         _rxy = _related[_rxykey]
                                     except KeyError:
                                         _related[_rxykey] = _a[j][k]
-                                    reldict['r_nonzero_count'] = \
-                                        reldict['r_nonzero_count'] + 1
-                                    reldict['r_nonzero_sum'] = \
-                                        reldict['r_nonzero_sum'] + _a[j][k]
+                                    reldict['r_nonzero_count'] = reldict['r_nonzero_count'] + 1
+                                    reldict['r_nonzero_sum'] = reldict['r_nonzero_sum'] + _a[j][k]
                                     if _a[j][k] > reldict['r_max']:
                                         reldict['r_max'] = _a[j][k]
                                     if _a[j][k] < reldict['r_min']:
@@ -878,12 +876,12 @@ def inbreeding_vanraden(pedobj, cleanmaps=1, gens=0, rels=0):
                     except KeyError:
                         #_parents[_parent_key] = _orig_id
                         _parents[_parent_key] = _parent_key
-                    # We only got into this loop because this combination of  parents
+                    # We only got into this loop because this combination of parents
                     # did not have an entry in fx, so put one there.
                     fx[_parent_key] = fx[_orig_id]
-                    #print 'Parent combination: ', _parent_key, '\t\tf: ', fx[_parent_key]
-                #print '\n\n', reldict, '\n\n'
-                #print '_related (%d): %s' % ( len(_related), _related )
+                    # print('Parent combination: ', _parent_key, '\t\tf: ', fx[_parent_key])
+                # print('\n\n', reldict, '\n\n')
+                # print('_related (%d): %s' % ( len(_related), _related ))
 
                 if cleanmaps:               # Clean up the subpedigree ID maps that we are
                     pyp_utils.delete_id_map(_tag)     # not going to use again.
@@ -897,24 +895,25 @@ def inbreeding_vanraden(pedobj, cleanmaps=1, gens=0, rels=0):
                 _cum_f_counter = _cum_f_counter + _f_counter
     #             if _pct_proc > 0.01:
     #            if pedobj.kw['messages'] == 'verbose':
-                    #print'%s of animals processed in round %s of #pyp_nrm/inbreeding_vanraden().' % (_pct_proc,_vanraden_round)
-                    #print'%s of all animals have been processed in #pyp_nrm/inbreeding_vanraden().' % (_cum_pct_proc)
+                    # print('%s of animals processed in round %s of #pyp_nrm/inbreeding_vanraden().' % (_pct_proc,_vanraden_round))
+                    # print('%s of all animals have been processed in #pyp_nrm/inbreeding_vanraden().' % _cum_pct_proc)
                 #try: logging.info('%s of animals processed in round %s of #pyp_nrm/inbreeding_vanraden().', _pct_proc, _vanraden_round)
                 #except: pass
-                logging.info('%s pct (%s) of all animals have been processed in pyp_nrm/inbreeding_vanraden().', _cum_pct_proc, _cum_f_counter)
+                logging.info('%s pct (%s) of all animals have been processed in pyp_nrm/inbreeding_vanraden().',
+                             _cum_pct_proc, _cum_f_counter)
             _counter = _counter + 1
 
     # Clean-up the parent-combination entries from fx
     for k in list(_parents.keys()):
         del fx[k]
 
-    try: logging.info('Exited inbreeding_vanraden()')
-    except: pass
-#     print fx
+    logging.info('Exited pyp_nrm/inbreeding_vanraden()')
+
     if rels:
         return fx, reldict
     else:
         return fx
+
 
 ##
 # inbreeding_aguilar() uses use Ignacio Aguilar's INBUPGF90 programto compute coefficients of
@@ -937,26 +936,26 @@ def inbreeding_aguilar(pedobj, amethod=3):
                   datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
             logging.error('[inbreeding_aguilar]: cannot find the INBUPGF90 executable at %s!',
                           datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
-        return None
+        return False
 
-    # Per an e-mail from Ignacio Aguilar on 06/25/2014, INBUPGF90 does NOT emit a proper
-    # status return code when it exits, which makes it tricky to know for sure when the
-    # job is done. I've observed a number of cases where the simulation appears to stall
-    # because subprocess.call() does not recognize that INBUPGF90 has finished a job. So,
+    # Per an e-mail from Ignacio Aguilar on 06/25/2014, INBUPGF90 does NOT emit a proper status return code when it
+    # exits, which makes it tricky to know for sure when the job is done. I've observed a number of cases where the
+    # simulation appears to stall because subprocess.call() does not recognize that INBUPGF90 has finished a job. So,
     # I've cobbled-together a solution using ideas from Ezequiel Nicolazzi
-    # (https://github.com/nicolazzie/AffyPipe/blob/master/AffyPipe.py) and a post on
-    # Stack Overflow (http://stackoverflow.com/questions/12057794/
-    # python-using-popen-poll-on-background-process). I'm not 100% sure that this works
-    # as intended, but I'm out of ideas.
+    # (https://github.com/nicolazzie/AffyPipe/blob/master/AffyPipe.py) and a post on Stack Overflow
+    # (http://stackoverflow.com/questions/12057794/python-using-popen-poll-on-background-process). I'm not 100% sure
+    # that this always works as intended, but I'm out of ideas.
     logfile = '%s_aguilar.log' % pedobj.kw['pedname']
     # Several methods can be used:
     # 1 - recursive as in Aguilar & Misztal, 2008 (default)
     # 2 - recursive but with coefficients store in memory, faster with large number of
     #     generations but more memory requirements
     # 3 - method as in Meuwissen & Luo 1992
-    if amethod not in [1, 2, 3]: amethod = 3
+    if amethod not in [1, 2, 3]:
+        amethod = 3
     if pedobj.kw['messages'] == 'verbose':
-        print('\t[inbreeding_aguilar]: Started inbupgf90 to calculate COI at %s' % datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
+        print('\t[inbreeding_aguilar]: Started inbupgf90 to calculate COI at %s' %
+              datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
     ###
     # 1. Put some code here to check for the inbupgf90 binary in the user's path.
     # ...
@@ -971,8 +970,10 @@ def inbreeding_aguilar(pedobj, amethod=3):
         time_waited += 10
         p.poll()
         if time_waited % 60 == 0 and pedobj.kw['messages'] == 'verbose':
-            print('\t\t[inbreeding_aguilar]: Waiting for INBUPGF90 to finish -- %s minutes so far...' % int(time_waited/60))
-            logging.info('[inbreeding_aguilar]: Waiting for INBUPGF90 to finish -- %s minutes so far...', int(time_waited/60))
+            print('\t\t[inbreeding_aguilar]: Waiting for INBUPGF90 to finish -- %s minutes so far...' %
+                  int(time_waited/60))
+            logging.info('[inbreeding_aguilar]: Waiting for INBUPGF90 to finish -- %s minutes so far...',
+                         int(time_waited/60))
 
     # Pick-up the output from INBUPGF90
     (results, errors) = p.communicate()
@@ -1014,12 +1015,13 @@ def inbreeding_aguilar(pedobj, amethod=3):
 
     # Clean-up
     os.remove(pedfile)
-    os.remove('%.solinb') % (pedfile)
-    os.remove('%s.errors') % (pedfile)
-    os.remove('%.inbavgs') % (pedfile)
+    os.remove('%.solinb') % pedfile
+    os.remove('%s.errors') % pedfile
+    os.remove('%.inbavgs') % pedfile
 
     # Send back the coefficients of inbreeding to the caller.
     return inbr
+
 
 ##
 # recurse_pedigree() performs the recursion needed to build the subpedigrees used by
@@ -1045,12 +1047,13 @@ def recurse_pedigree(pedobj, anid, _ped):
         _sire = pedobj.pedigree[anid-1].sireID
         _dam = pedobj.pedigree[anid-1].damID
         if _sire != pedobj.kw['missing_parent']:
-            recurse_pedigree(pedobj,_sire,_ped)
+            recurse_pedigree(pedobj, _sire, _ped)
         if _dam != pedobj.kw['missing_parent']:
-            recurse_pedigree(pedobj,_dam,_ped)
+            recurse_pedigree(pedobj, _dam, _ped)
     except:
         pass
     return _ped
+
 
 ##
 # recurse_pedigree_n() recurses to build a pedigree of depth n.  A depth less than 1 returns
@@ -1074,12 +1077,13 @@ def recurse_pedigree_n(pedobj, anid, _ped, depth=3):
             _sire = pedobj.pedigree[anid-1].sireID
             _dam = pedobj.pedigree[anid-1].damID
             if _sire != pedobj.kw['missing_parent']:
-                recurse_pedigree_n(pedobj,_sire,_ped,depth-1)
+                recurse_pedigree_n(pedobj, _sire, _ped, depth-1)
             if _dam != pedobj.kw['missing_parent']:
-                recurse_pedigree_n(pedobj,_dam,_ped,depth-1)
+                recurse_pedigree_n(pedobj, _dam, _ped, depth-1)
     except:
         pass
     return _ped
+
 
 ##
 # recurse_pedigree_onesided() recurses to build a subpedigree from either the sire
@@ -1102,14 +1106,15 @@ def recurse_pedigree_onesided(pedobj, anid, _ped, side):
         if side == 's':
             _sire = pedobj.pedigree[anid-1].sireID
             if _sire != pedobj.kw['missing_parent']:
-                recurse_pedigree(pedobj,_sire,_ped)
+                recurse_pedigree(pedobj, _sire, _ped)
         else:
             _dam = pedobj.pedigree[anid-1].damID
             if _dam != pedobj.kw['missing_parent']:
-                recurse_pedigree(pedobj,_dam,_ped)
+                recurse_pedigree(pedobj, _dam, _ped)
     except:
         pass
     return _ped
+
 
 ##
 # recurse_pedigree_idonly() performs the recursion needed to build subpedigrees.
@@ -1124,18 +1129,20 @@ def recurse_pedigree_idonly(pedobj, anid, _ped):
     try:
         anid = int(anid)
         if anid != 0:
-            #print '\t\tanid %s\tsireid %s\tdamid %s' % ( anid, pedobj.pedigree[anid-1].sireID, pedobj.pedigree[anid-1].damID )
+            # print('\t\tanid %s\tsireid %s\tdamid %s' %
+            #      (anid, pedobj.pedigree[anid-1].sireID, pedobj.pedigree[anid-1].damID))
             if pedobj.pedigree[anid-1].animalID not in _ped:
                 _ped.append(pedobj.pedigree[anid-1].animalID)
         _sire = pedobj.pedigree[anid-1].sireID
         _dam = pedobj.pedigree[anid-1].damID
         if _sire != pedobj.kw['missing_parent']:
-            recurse_pedigree_idonly(pedobj,_sire,_ped)
+            recurse_pedigree_idonly(pedobj, _sire, _ped)
         if _dam != pedobj.kw['missing_parent']:
-            recurse_pedigree_idonly(pedobj,_dam,_ped)
+            recurse_pedigree_idonly(pedobj, _dam, _ped)
     except:
         pass
     return _ped
+
 
 ##
 # recurse_pedigree_idonly_side() performs the recursion needed to build
@@ -1165,13 +1172,14 @@ def recurse_pedigree_idonly_side(pedobj, anid, _ped, side='s'):
         _dam = pedobj.pedigree[anid-1].damID
         if side == 's':
             if _sire != pedobj.kw['missing_parent']:
-                recurse_pedigree_idonly_side(pedobj,_sire,_ped,side='s')
+                recurse_pedigree_idonly_side(pedobj, _sire, _ped, side='s')
         if side == 'd':
             if _dam != pedobj.kw['missing_parent']:
-                recurse_pedigree_idonly_side(pedobj,_dam,_ped,side='d')
+                recurse_pedigree_idonly_side(pedobj, _dam, _ped, side='d')
     except:
         pass
     return _ped
+
 
 ##
 # inbreeding_tabular() computes CoI using the tabular method by calling
@@ -1179,7 +1187,8 @@ def recurse_pedigree_idonly_side(pedobj, anid, _ped, side='s'):
 # to return successfully requires that you are able to allocate a matrix
 # of floats of dimension len(myped)**2.
 # @param pedobj A PyPedal pedigree object.
-# @param gens The number of generations from the pedigree to be used for calculating CoI.  By default, gens=0, which uses the complete pedigree.
+# @param gens The number of generations from the pedigree to be used for calculating CoI. By default, gens=0, which
+#             uses the complete pedigree.
 # @param rels Flag indicating whether or not summary statistics should be computed for coefficients of relationship.
 # @retval A dictionary of CoI keyed to renumbered animal IDs
 def inbreeding_tabular(pedobj, gens=0, rels=0):
@@ -1189,43 +1198,47 @@ def inbreeding_tabular(pedobj, gens=0, rels=0):
     to return successfully requires that you are able to allocate a matrix
     of floats of dimension len(myped)**2.
     """
-    try: logging.info('Entered inbreeding_tabular()')
-    except: pass
+    logging.info('Entered pyp_nrm/inbreeding_tabular().')
 
     # If the user wants summary stats on coefficients of relationship,
     # prepare the dictionary, counters, and accumulators.
     if rels:
-        reldict = {}
-        reldict['r_count'] = 0
-        reldict['r_nonzero_count'] = 0
-        reldict['r_nonzero_sum'] = 0.
-        reldict['r_max'] = 0.
-        reldict['r_min'] = 1.
-        reldict['r_sum'] = 0.
+        reldict = {
+            'r_count': 0,
+            'r_nonzero_count': 0,
+            'r_nonzero_sum': 0.,
+            'r_max': 0.,
+            'r_min': 1.,
+            'r_sum': 0.,
+        }
 
     # See pyp_nrm.inbreeding_vanraden() for detailed notes on what
     # the code in this loop does.
     if int(gens) > 0:
-        _ped = pyp_network.find_ancestors_g(ng, i, [], gens)
+        #ng = pyp_network.ped_to_graph(pedobj)
+
+        _ped = pyp_network.find_ancestors_g(ng, len(pedobj.idmap), {}, gens)
+        # _ped = pyp_network.find_ancestors_g(ng, i, [], gens)
         _ped.append(i)
         _a, _s, _r = [], [], []
         _map = {}
         for j in _ped:
             _r.append(copy.copy(pedobj.pedigree[int(j)-1]))
         if pedobj.kw['slow_reorder']:
-            _r = pyp_utils.reorder(_r,_tag)      # Reorder the pedigree
+            _r = pyp_utils.reorder(_r, _tag)      # Reorder the pedigree
         else:
-            _r = pyp_utils.fast_reorder(_r,_tag)      # Reorder the pedigree
-        _s, _map = pyp_utils.renumber(_r,_tag, returnmap=1, debug=pedobj.kw['debug_messages'],animaltype=pedobj.kw['animal_type'])
+            _r = pyp_utils.fast_reorder(_r, _tag)      # Reorder the pedigree
+        _s, _map = pyp_utils.renumber(_r, _tag, returnmap=1, debug=pedobj.kw['debug_messages'],
+                                      animaltype=pedobj.kw['animal_type'])
         _backmap = {}
         for _mk, _mv in _map.items():
             _backmap[_mv] = _mk
         _opts = copy.copy(pedobj.kw)
-        _opts['filetag'] = _tag
+        _opts['filetag'] = pedobj.ke['filetag']
         if pedobj.kw['nrm_method'] == 'nrm':
-            _a = fast_a_matrix(pedobj.pedigree,pedobj.kw,method=pedobj.kw['matrix_type'])
+            _a = fast_a_matrix(pedobj.pedigree, pedobj.kw, method=pedobj.kw['matrix_type'])
         else:
-            _a = fast_a_matrix_r(pedobj.pedigree,pedobj.kw,method=pedobj.kw['matrix_type'])
+            _a = fast_a_matrix_r(pedobj.pedigree, pedobj.kw, method=pedobj.kw['matrix_type'])
         fx = {}
         for i in range(len(_ped)):
             fx[pedobj.pedigree[i].animalID] = _a[i][i] - 1.
@@ -1233,7 +1246,7 @@ def inbreeding_tabular(pedobj, gens=0, rels=0):
     else:
         try:
             if pedobj.kw['nrm_method'] == 'nrm':
-                _a = fast_a_matrix(pedobj.pedigree, pedobj.kw,method=pedobj. kw['matrix_type'])
+                _a = fast_a_matrix(pedobj.pedigree, pedobj.kw, method=pedobj. kw['matrix_type'])
             else:
                 _a = fast_a_matrix_r(pedobj.pedigree, pedobj.kw, method=pedobj.kw['matrix_type'])
             fx = {}
@@ -1254,31 +1267,31 @@ def inbreeding_tabular(pedobj, gens=0, rels=0):
             del(_a)
         except:
             pass
-    try: logging.info('Exited inbreeding_tabular()')
-    except: pass
+
+    logging.info('Exited pyp_nrm/inbreeding_tabular()')
+
     if rels:
         return fx, reldict
     else:
         return fx
 
+
 ##
 # inbreeding_meuwissen_luo() computes CoI using the method of Meuwissen and
 # Luo (1992). It calculates only inbreeding coefficients, not relationships.
 # @param pedobj A PyPedal pedigree object.
-# @param gens The number of generations from the pedigree to be used for calculating CoI.  By default, gens=0, which uses the complete pedigree.
+# @param gens The number of generations from the pedigree to be used for calculating CoI. By default, gens=0, which
+#             uses the complete pedigree.
 # @param rels Flag indicating whether or not summary statistics should be computed for coefficients of relationship.
 # @retval A dictionary of CoI keyed to renumbered animal IDs
-#@profile
-def inbreeding_meuwissen_luo(pedobj, gens=0,**kw):
+def inbreeding_meuwissen_luo(pedobj, gens=0, **kw):
     """
-    inbreeding_meuwissen_luo() computes CoI using the method of Meuwissen and
-    Luo (1992). It calculates only inbreeding coefficients, not relationships.
-    This code is a pretty direct implementation of the algorithm presented on
-    pp. 311-312 of Meuiwissen, T.H.E., and Z. Luo. 1992. Computing inbreeding
-    coefficients in large populations. Genet. Sel. Evol. 24:305-313.
+    inbreeding_meuwissen_luo() computes CoI using the method of Meuwissen and Luo (1992). It calculates only
+    inbreeding coefficients, not relationships. This code is a pretty direct implementation of the algorithm
+    presented on pp. 311-312 of Meuiwissen, T.H.E., and Z. Luo. 1992. Computing inbreeding coefficients in large
+    populations. Genet. Sel. Evol. 24:305-313.
     """
-    try: logging.info('Entered inbreeding_meuwissen_luo()')
-    except: pass
+    logging.info('Entered pyp_nrm/inbreeding_meuwissen_luo()')
 
     # Setup dictionary to accumulate coefficients of inbreeding
     fx = {}
@@ -1288,89 +1301,103 @@ def inbreeding_meuwissen_luo(pedobj, gens=0,**kw):
     # First, try and allocate the vectors in RAM. If that does not work, try and allocate them using
     # memory-mapped files. If that does not work, well, give up.
     try:
-        logging.info('Allocating vectors in pyp_nrm.inbreeding_meuwissen_luo().')
-        lvec = numpy.zeros((len(pedobj.pedigree)),'d')
-        #print 'lvec:\t', lvec
-        avec = numpy.zeros((len(pedobj.pedigree)),'d')
-        dvec = numpy.zeros((len(pedobj.pedigree)),'d')
+        logging.info('Allocating vectors in pyp_nrm/inbreeding_meuwissen_luo().')
+        lvec = numpy.zeros((len(pedobj.pedigree)), dtype=numpy.float32)
+        # print('lvec:\t', lvec)
+        avec = numpy.zeros((len(pedobj.pedigree)), dtype=numpy.float32)
+        dvec = numpy.zeros((len(pedobj.pedigree)), dtype=numpy.float32)
     except MemoryError:
-	logging.info('Unable to allocate a matrix of rank %s in RAM, trying to allocate a memory-mapped file, in pyp_nrm.inbreeding_meuwissen_luo()!', l)
-        lvec = numpy.memmap('lvec_memmap.bin', dtype='float32', mode='w+', shape=(len(pedobj.pedigree)))
-	lvec = 0.0
-	avec = numpy.memmap('avec_memmap.bin', dtype='float32', mode='w+', shape=(len(pedobj.pedigree)))
-	avec = 0.0
-	dvec = numpy.memmap('dvec_memmap.bin', dtype='float32', mode='w+', shape=(len(pedobj.pedigree)))
-	dvec = 0.0
+        logging.info('Unable to allocate a matrix of rank %s in RAM, trying to allocate a memory-mapped file, '
+                     'in pyp_nrm/inbreeding_meuwissen_luo()!', len(pedobj.pedigree))
+        lvec = numpy.memmap('lvec_memmap.bin', dtype=numpy.float32, mode='w+', shape=(len(pedobj.pedigree)))
+        lvec = 0.0
+        avec = numpy.memmap('avec_memmap.bin', dtype=numpy.float32, mode='w+', shape=(len(pedobj.pedigree)))
+        avec = 0.0
+        dvec = numpy.memmap('dvec_memmap.bin', dtype=numpy.float32, mode='w+', shape=(len(pedobj.pedigree)))
+        dvec = 0.0
     except:
-        print('[ERROR]: Unable to allocate a matrix of rank %s in pyp_nrm.inbreeding_meuwissen_luo()!' % ( l ))
-        logging.error('[ERROR]: Unable to allocate a matrix of rank %s in pyp_nrm.inbreeding_meuwissen_luo()!', l)
-	return False
+        print('[ERROR]: Unable to allocate a matrix of rank %s in pyp_nrm/inbreeding_meuwissen_luo()!' %
+              len(pedobj.pedigree))
+        logging.error('[ERROR]: Unable to allocate a matrix of rank %s in pyp_nrm/inbreeding_meuwissen_luo()!',
+                      len(pedobj.pedigree))
+        return False
 
     if pedobj.kw['debug_messages']:
         print('[DEBUG]: Starting loop over pedigree with ', len(pedobj.pedigree), ' animals')
     for i in range(len(pedobj.pedigree)):
         if pedobj.kw['debug_messages']:
-  	    print('\t[DEBUG]: Initializing local data structures for animal %s (idx: %s)' % ( pedobj.pedigree[i].animalID, i))
-            print('\t\t[DEBUG]: a[%s] = %s' % ( i, avec[i] ))
+            print('\t[DEBUG]: Initializing local data structures for animal %s (idx: %s)' %
+                  (pedobj.pedigree[i].animalID, i))
+            print('\t\t[DEBUG]: a[%s] = %s' % (i, avec[i]))
         anc = []
-	lvec[:] = 0.0
-	lvec[i] = 1.0
+        lvec[:] = 0.0
+        lvec[i] = 1.0
         if pedobj.kw['debug_messages']:
-	    print('\t\t[DEBUG]: l[%s] = %s' % ( i, lvec[i] ))
-	# We're using 0-indexing, so the little F0 = -1 trick that M&L use does not help us here.
-	# Check for the most common case first -- both parents unknown
-	if pedobj.pedigree[i].sireID != pedobj.kw['missing_parent'] and pedobj.pedigree[i].damID != pedobj.kw['missing_parent']:
-	    dvec[i] = 0.5 - ( 0.25 * ( fx[pedobj.pedigree[i].sireID] + fx[pedobj.pedigree[i].damID] ) )
-	# Then check for both parents unknown
-	elif pedobj.pedigree[i].sireID == pedobj.kw['missing_parent'] and pedobj.pedigree[i].damID == pedobj.kw['missing_parent']:
-	    dvec[i] = 1.0
-	# Finally, deal with either a known sire, unknown dam or known dam, unknown sire.
-	else:
-	    # The "-1.0" in the expressions below comes from M&L setting the coefficient of inbreeding for unknown parents to -1.0
-	    # in order to ensure that the within-family variance is correct.
-	    # Knwon sire, unknown dam
-	    if pedobj.pedigree[i].sireID != pedobj.kw['missing_parent'] and pedobj.pedigree[i].damID == pedobj.kw['missing_parent']:
-                dvec[i] = 0.5 - ( 0.25 * ( fx[pedobj.pedigree[i].sireID] - 1.0 ) )
-	    else:
-		dvec[i] = 0.5 - ( 0.25 * ( fx[pedobj.pedigree[i].damID] - 1.0 ) )
-        if pedobj.kw['debug_messages']:
-	    print('\t\t[DEBUG]: dvec[%s] = %s' % ( i, dvec[i] ))
+            print('\t\t[DEBUG]: l[%s] = %s' % (i, lvec[i]))
+
+        # We're using 0-indexing, so the little F0 = -1 trick that M&L use does not help us here.
+        # Check for the most common case first -- both parents unknown
+        if (pedobj.pedigree[i].sireID != pedobj.kw['missing_parent'] and
+                pedobj.pedigree[i].damID != pedobj.kw['missing_parent']):
+            dvec[i] = 0.5 - (0.25 * (fx[pedobj.pedigree[i].sireID] + fx[pedobj.pedigree[i].damID]))
+        # Then check for both parents unknown
+        elif (pedobj.pedigree[i].sireID == pedobj.kw['missing_parent'] and
+              pedobj.pedigree[i].damID == pedobj.kw['missing_parent']):
+            dvec[i] = 1.0
+        # Finally, deal with either a known sire, unknown dam or known dam, unknown sire.
+        else:
+            # The "-1.0" in the expressions below comes from M&L setting the coefficient of inbreeding for unknown
+            # parents to -1.0 in order to ensure that the within-family variance is correct.
+            # Knwon sire, unknown dam
+            if (pedobj.pedigree[i].sireID != pedobj.kw['missing_parent'] and
+                    pedobj.pedigree[i].damID == pedobj.kw['missing_parent']):
+                dvec[i] = 0.5 - (0.25 * (fx[pedobj.pedigree[i].sireID] - 1.0))
+            else:
+                dvec[i] = 0.5 - (0.25 * (fx[pedobj.pedigree[i].damID] - 1.0))
+            if pedobj.kw['debug_messages']:
+                print('\t\t[DEBUG]: dvec[%s] = %s' % (i, dvec[i]))
         anc.append(i)
         if pedobj.kw['debug_messages']:
-	    print('\t\t[DEBUG]: Starting loop over ancestor list for animal %s (idx: %s)' % ( pedobj.pedigree[i].animalID, pedobj.pedigree[i].animalID-1 ))
-	while len(anc) > 0:
+            print('\t\t[DEBUG]: Starting loop over ancestor list for animal %s (idx: %s)' %
+                  (pedobj.pedigree[i].animalID, pedobj.pedigree[i].animalID-1))
+        while len(anc) > 0:
             if pedobj.kw['debug_messages']:
-	        print('\t\t\t[DEBUG]: Starting ancestor list: %s' % ( anc ))
-	    jidx = max(anc)				# This is the index of the ID in the pedigree
-	    j = pedobj.pedigree[jidx].animalID		# This is an animal ID
+                print('\t\t\t[DEBUG]: Starting ancestor list: %s' % anc)
+            jidx = max(anc)				            # This is the index of the ID in the pedigree
+            j = pedobj.pedigree[jidx].animalID	    # This is an animal ID
             if pedobj.kw['debug_messages']:
-	        print('\t\t\t[DEBUG]: Processing Ancestor %s (idx: %s)\tSire: %s\tDam: %s' % \
-		( j, jidx, pedobj.pedigree[jidx].sireID, pedobj.pedigree[jidx].damID ))
-	    if pedobj.pedigree[jidx].sireID != pedobj.kw['missing_parent'] and pedobj.pedigree[jidx].sireID-1 not in anc:
-	        anc.append(pedobj.pedigree[jidx].sireID-1)
-            lvec[pedobj.pedigree[jidx].sireID-1] = lvec[pedobj.pedigree[jidx].sireID-1] + ( 0.5 * lvec[jidx] )
-	    if pedobj.pedigree[jidx].damID != pedobj.kw['missing_parent'] and pedobj.pedigree[jidx].damID-1 not in anc:
+                print('\t\t\t[DEBUG]: Processing Ancestor %s (idx: %s)\tSire: %s\tDam: %s' %
+                      (j, jidx, pedobj.pedigree[jidx].sireID, pedobj.pedigree[jidx].damID))
+            if (pedobj.pedigree[jidx].sireID != pedobj.kw['missing_parent'] and
+                    pedobj.pedigree[jidx].sireID-1 not in anc):
+                anc.append(pedobj.pedigree[jidx].sireID-1)
+            lvec[pedobj.pedigree[jidx].sireID-1] = lvec[pedobj.pedigree[jidx].sireID-1] + (0.5 * lvec[jidx])
+            if (pedobj.pedigree[jidx].damID != pedobj.kw['missing_parent'] and
+                    pedobj.pedigree[jidx].damID-1 not in anc):
                 anc.append(pedobj.pedigree[jidx].damID-1)
-            lvec[pedobj.pedigree[jidx].damID-1] = lvec[pedobj.pedigree[jidx].damID-1] + ( 0.5 * lvec[jidx] )
-	    if pedobj.kw['debug_messages']:
-	        print('\t\t\t\t[DEBUG]: anc      = %s' % ( anc ))
-                print('\t\t\t\t[DEBUG]: l[%s]    = %s' % ( jidx, lvec[jidx] ))
-	        print('\t\t\t\t[DEBUG]: d[%s]    = %s' % ( jidx, dvec[jidx] ))
-	        print('\t\t\t\t[DEBUG]: RHS      = %s' % ( lvec[jidx] * lvec[jidx] * dvec[jidx] ))
-	    avec[i] = avec[i] + lvec[jidx] * lvec[jidx] * dvec[jidx]
+            lvec[pedobj.pedigree[jidx].damID-1] = lvec[pedobj.pedigree[jidx].damID-1] + (0.5 * lvec[jidx])
             if pedobj.kw['debug_messages']:
-	        print('\t\t\t\t[DEBUG]: avec[%s] = %s' % ( i, avec[i] ))
-	    anc.remove(jidx)
+                print('\t\t\t\t[DEBUG]: anc      = %s' % anc)
+                print('\t\t\t\t[DEBUG]: l[%s]    = %s' % (jidx, lvec[jidx]))
+                print('\t\t\t\t[DEBUG]: d[%s]    = %s' % (jidx, dvec[jidx]))
+                print('\t\t\t\t[DEBUG]: RHS      = %s' % (lvec[jidx] * lvec[jidx] * dvec[jidx]))
+            avec[i] = avec[i] + lvec[jidx] * lvec[jidx] * dvec[jidx]
+            if pedobj.kw['debug_messages']:
+                print('\t\t\t\t[DEBUG]: avec[%s] = %s' % (i, avec[i]))
+            anc.remove(jidx)
         if pedobj.kw['debug_messages']:
-            print('\t\t[DEBUG]: avec[%s] - 1 = %s' % ( i, avec[i]-1 ))
-	fx[pedobj.pedigree[i].animalID] = avec[i] - 1.0
+            print('\t\t[DEBUG]: avec[%s] - 1 = %s' % (i, avec[i]-1))
+        fx[pedobj.pedigree[i].animalID] = avec[i] - 1.0
         if pedobj.kw['debug_messages']:
-	    print('\t\t[DEBUG]: fx[%s] = %s' % ( pedobj.pedigree[i].animalID, fx[pedobj.pedigree[i].animalID] ))
-	    print('\t[DEBUG]: Current coefficients of inbeeding: ', fx)
+            print('\t\t[DEBUG]: fx[%s] = %s' % (pedobj.pedigree[i].animalID, fx[pedobj.pedigree[i].animalID]))
+            print('\t[DEBUG]: Current coefficients of inbeeding: ', fx)
     # We need to clean-up so that we don't have things like memory-ammped files laying around.
-    del lvec; del avec; del dvec
-    try: logging.info('Exited inbreeding_meuwissen_luo()')
-    except: pass
+    del lvec
+    del avec
+    del dvec
+
+    logging.info('Exited pyp_nrm/inbreeding_meuwissen_luo().')
+
     return fx
 
 
