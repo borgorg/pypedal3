@@ -2,9 +2,9 @@
 
 ###############################################################################
 # NAME: pyp_nrm.py
-# VERSION: 2.0.0 (29SEPTEMBER2010)
-# AUTHOR: John B. Cole, PhD (john.cole@ars.usda.gov)
-# LICENSE: LGPL
+# VERSION: 3.0.0 (22AUGUST2024)
+# AUTHOR: John B. Cole (john.b.cole@gmail.com)
+# LICENSE: LGPL v2.1 (see LICENSE file)
 ################################################################################ FUNCTIONS:
 #   a_matrix()
 #   fast_a_matrix()
@@ -32,94 +32,97 @@
 # large pedigrees using the recursive method of VanRaden (1992).
 ##
 
+import copy
 import datetime
 import logging
 import numpy
 import subprocess
 import time
 try:
-    from pysparse import spmatrix
+    from scipy.sparse import coo_array
 except ImportError:
-    # logging.info('Could not import the spmatrix module from PySparse! Using NumPy dense matrices instead.')
-    print('[INFO]: Could not import the spmatrix module from PySparse in pyp_nrm! NumPy dense matrices will be used instead.')
+    logging.info('pyp_nrm couldn\'t import the scipy.sparse module! Using NumPy dense matrices instead.')
+    print('[INFO]: pyp_nrm couldn\'t import the scipy.sparse module! Using NumPy dense matrices instead.')
 from . import pyp_utils
+
 
 ##
 # a_matrix() is used to form a numerator relationship matrix from a pedigree.  DEPRECATED.
-# use fast_a_matrix() instead.
+# use fast_a_matrix() instead.  DEPRECATED in favor of pyp_nem/fast_a_matrix().
 # @param pedobj A PyPedal pedigree object.
 # @param save Flag to indicate whether or not the relationship matrix is written to a file.
 # @retval The NRM as a NumPy matrix.
-def a_matrix(pedobj, save=0):
+def a_matrix(pedobj, save=False):
     """
-    Form a numerator relationship matrix from a pedigree.  DEPRECATED.
+    Form a numerator relationship matrix from a pedigree.  DEPRECATED in favor of pyp_nem/fast_a_matrix().
     """
-    try: logging.info('Entered a_matrix()')
-    except: pass
+    logging.info('Entered pyp_nrm/a_matrix().')
     l = pedobj.medata.num_records
     # Grab some array tools
     try:
-        a = numpy.zeros([l,l],'d')  # initialize a matrix of zeros of appropriate dimension
+        a = numpy.zeros([l, l], 'd')  # initialize a matrix of zeros of appropriate dimension
         for row in range(l):
-            for col in range(row,l):
+            for col in range(row, l):
                 # cast these b/c items are read from the pedigree file as characters, not integers
                 pedobj.pedigree[col].animalID = int(pedobj.pedigree[col].animalID)
                 pedobj.pedigree[col].sireID = int(pedobj.pedigree[col].sireID)
                 pedobj.pedigree[col].damID = int(pedobj.pedigree[col].damID)
                 #if pedobj.pedigree[col].sireID == 0 and pedobj.pedigree[col].damID == 0:
-                if str(pedobj.pedigree[col].sireID) == str(pedobj.kw['missing_parent']) and str(pedobj.pedigree[col].damID) == str(pedobj.kw['missing_parent']):
+                if (str(pedobj.pedigree[col].sireID) == str(pedobj.kw['missing_parent']) and
+                        str(pedobj.pedigree[col].damID) == str(pedobj.kw['missing_parent'])):
                     if row == col:
                         # both parents unknown and assumed unrelated
-                        a[row,col] = 1.
+                        a[row, col] = 1.
                     else:
-                        a[row,col] = 0.
-                        a[col,row] = a[row,col]
+                        a[row, col] = 0.
+                        a[col, row] = a[row, col]
                 elif str(pedobj.pedigree[col].sireID) == str(pedobj.kw['missing_parent']):
                     # sire unknown, dam known
                     if row == col:
-                        a[row,col] = 1.
+                        a[row, col] = 1.
                     else:
-                        a[row,col] = 0.5 * a[row,pedobj.pedigree[col].damID-1]
-                        a[col,row] = a[row,col]
+                        a[row, col] = 0.5 * a[row, pedobj.pedigree[col].damID-1]
+                        a[col, row] = a[row, col]
                 elif str(pedobj.pedigree[col].damID) == str(pedobj.kw['missing_parent']):
                     # sire known, dam unknown
                     if row == col:
-                        a[row,col] = 1.
+                        a[row, col] = 1.
                     else:
-                        a[row,col] = 0.5 * a[row,pedobj.pedigree[col].sireID-1]
-                        a[col,row] = a[row,col]
-                elif str(pedobj.pedigree[col].sireID) != str(pedobj.kw['missing_parent']) and str(pedobj.pedigree[col].damID) != str(pedobj.kw['missing_parent']):
+                        a[row, col] = 0.5 * a[row, pedobj.pedigree[col].sireID-1]
+                        a[col, row] = a[row, col]
+                elif (str(pedobj.pedigree[col].sireID) != str(pedobj.kw['missing_parent']) and
+                      str(pedobj.pedigree[col].damID) != str(pedobj.kw['missing_parent'])):
                     # both parents known
                     if row == col:
-                        a[row,col] = 1. + ( 0.5 * a[pedobj.pedigree[col].sireID-1,pedobj.pedigree[col].damID-1] )
+                        a[row, col] = 1. + (0.5 * a[pedobj.pedigree[col].sireID-1, pedobj.pedigree[col].damID-1])
                     else:
-                        intermediate = a[row,pedobj.pedigree[col].sireID-1] + a[row,pedobj.pedigree[col].damID-1]
-                        finprod = 0.5 * intermediate
-                        a[row,col] = 0.5 * intermediate
-                        a[col,row] = a[row,col]
+                        intermediate = a[row, pedobj.pedigree[col].sireID-1] + a[row, pedobj.pedigree[col].damID-1]
+                        a[row, col] = 0.5 * intermediate
+                        a[col, row] = a[row, col]
                 else:
-                    print('[ERROR]: There is a problem with the sire (ID %s) and/or dam (ID %s) of animal %s' % (pedobj.pedigree[col].sireID,pedobj.pedigree[col].damID,pedobj.pedigree[col].animalID))
+                    print('[ERROR]: There is a problem with the sire (ID %s) and/or dam (ID %s) of animal %s' %
+                          (pedobj.pedigree[col].sireID, pedobj.pedigree[col].damID, pedobj.pedigree[col].animalID))
                     break
     except:
-        a = numpy.zeros([1,1],'d')
+        a = numpy.zeros([1, 1], 'd')
 
     if save:
-        a_outputfile = '%s%s%s' % (pedobj.kw['filetag'],'_a_matrix_','.dat')
-        aout = open(a_outputfile,'w')
+        a_outputfile = '%s%s%s' % (pedobj.kw['filetag'], '_a_matrix_', '.dat')
+        aout = open(a_outputfile, 'w')
         for row in range(l):
             line = ''
             for col in range(l):
                 if col == 0:
-                    line = '%7.5f' % (a[row,col])
+                    line = '%7.5f' % a[row, col]
                 else:
-                    line = '%s%s%s' % (line,',',a[row,col])
-            line = '%s%s' % (line,'\n')
+                    line = '%s%s%s' % (line, ',', a[row, col])
+            line = '%s%s' % (line, '\n')
             aout.write(line)
         aout.close()
 
-    try: logging.info('Exited a_matrix()')
-    except: pass
+    logging.info('Exited pyp_nrm/a_matrix().')
     return a
+
 
 ##
 # Form a numerator relationship matrix from a pedigree.  fast_a_matrix() is a hacked version of a_matrix()
@@ -171,16 +174,13 @@ def fast_a_matrix(pedigree, pedopts, save=0, method='dense', debug=0, fill=1):
     # relationship matrices.
     if method == 'sparse':
         try:
-#            from pysparse import spmatrix
-            a = spmatrix.ll_mat_sym(l*l)
-            for i in range(l):
-                a[i,i] = 1.
-        except:
-#            logging.error('Could not import the spmatrix module from PySparse! Using NumPY dense matrices instead.')
-#            print '[ERROR]: Could not import the spmatrix module from PySparse! Using NumPY dense matrices instead.'
-            #a = numpy.zeros([l,l],'d')
+            from scipy.sparse import coo_array
+            a = coo_array((l, l), dtype=numpy.float32).toarray()
+        except ImportError:
+            logging.error('Could not import scipy.sparse; using Numpy instead!')
+            a = numpy.zeros([l, l], dtype=numpy.float32)  # initialize a matrix of zeros
 	    try:
-                a = numpy.zeros([l,l],'d')  # initialize a matrix of zeros of appropriate size
+                a = numpy.zeros([l,l],dtype=numpy.float32)  # initialize a matrix of zeros of appropriate size
 	    except MemoryError:
 	        a = numpy.memmap('fast_a_matrix_mmap.bin', dtype='float32', mode='w+', shape=(l,l))
 	    except:
@@ -1373,16 +1373,17 @@ def inbreeding_meuwissen_luo(pedobj, gens=0,**kw):
     except: pass
     return fx
 
+
 ##
 # inbreeding_modified_meuwissen_luo() computes CoI using the method of Meuwissen and
 # Luo (1992). as modified by Quaas (1995). It calculates only inbreeding coefficients,
 # not relationships.
 # @param pedobj A PyPedal pedigree object.
-# @param gens The number of generations from the pedigree to be used for calculating CoI.  By default, gens=0, which uses the complete pedigree.
+# @param gens The number of generations from the pedigree to be used for calculating CoI. By default, gens=0, which
+#             uses the complete pedigree.
 # @param rels Flag indicating whether or not summary statistics should be computed for coefficients of relationship.
 # @retval A dictionary of CoI keyed to renumbered animal IDs
-#@profile
-def inbreeding_modified_meuwissen_luo(pedobj, gens=0,**kw):
+def inbreeding_modified_meuwissen_luo(pedobj, gens=0, **kw):
     """
     inbreeding_modified_meuwissen_luo() computes CoI using the method of Meuwissen
     and Luo (1992) as modified by Quaas (1995). It calculates only inbreeding coefficients,
@@ -1390,8 +1391,7 @@ def inbreeding_modified_meuwissen_luo(pedobj, gens=0,**kw):
     in Appendix B.2 of Mrode (2005). Mrode cites Quaas's method as: Quaas, R. L. 1995. Fx
     algorithms. An unpublished note.
     """
-    try: logging.info('Entered inbreeding_modified_meuwissen_luo()')
-    except: pass
+    logging.info('Entered pyp_nrm/inbreeding_modified_meuwissen_luo()')
 
     # Setup dictionary to accumulate coefficients of inbreeding
     fx = {}
@@ -1401,168 +1401,235 @@ def inbreeding_modified_meuwissen_luo(pedobj, gens=0,**kw):
     # First, try and allocate the vectors in RAM. If that does not work, try and allocate them using
     # memory-mapped files. If that does not work, well, give up.
     try:
-        logging.info('Allocating vectors in pyp_nrm.inbreeding_modified_meuwissen_luo().')
-        lvecs = numpy.zeros((len(pedobj.pedigree)),'d')
-        #print 'lvecs:\t', lvecs
-        lvecd = numpy.zeros((len(pedobj.pedigree)),'d')
-        avec = numpy.zeros((len(pedobj.pedigree)),'d')
-        dvec = numpy.zeros((len(pedobj.pedigree)),'d')
+        logging.info('Allocating vectors in pyp_nrm/inbreeding_modified_meuwissen_luo().')
+        lvecs = numpy.zeros((len(pedobj.pedigree)), dtype=numpy.float32)
+        # print('lvecs:\t', lvecs)
+        lvecd = numpy.zeros((len(pedobj.pedigree)), dtype=numpy.float32)
+        avec = numpy.zeros((len(pedobj.pedigree)), dtype=numpy.float32)
+        dvec = numpy.zeros((len(pedobj.pedigree)), dtype=numpy.float32)
     except MemoryError:
-	logging.info('Unable to allocate a matrix of rank %s in RAM, trying to allocate a memory-mapped file, in pyp_nrm.inbreeding_modified_meuwissen_luo()!', l)
-        lvecs = numpy.memmap('lvecs_memmap.bin', dtype='float32', mode='w+', shape=(len(pedobj.pedigree)))
-	lvecs = 0.0
-        lvecd = numpy.memmap('lvecd_memmap.bin', dtype='float32', mode='w+', shape=(len(pedobj.pedigree)))
-	lvecd = 0.0
-	avec = numpy.memmap('avec_memmap.bin', dtype='float32', mode='w+', shape=(len(pedobj.pedigree)))
-	avec = 0.0
-	dvec = numpy.memmap('dvec_memmap.bin', dtype='float32', mode='w+', shape=(len(pedobj.pedigree)))
-	dvec = 0.0
+        logging.info('Unable to allocate a matrix of rank %s in RAM, trying to allocate a memory-mapped file, '
+                     'in pyp_nrm/inbreeding_modified_meuwissen_luo()!', len(pedobj.pedigree))
+        lvecs = numpy.memmap('lvecs_memmap.bin', dtype=numpy.float32, mode='w+', shape=(len(pedobj.pedigree)))
+        lvecs = 0.0
+        lvecd = numpy.memmap('lvecd_memmap.bin', dtype=numpy.float32, mode='w+', shape=(len(pedobj.pedigree)))
+        lvecd = 0.0
+        avec = numpy.memmap('avec_memmap.bin', dtype=numpy.float32, mode='w+', shape=(len(pedobj.pedigree)))
+        avec = 0.0
+        dvec = numpy.memmap('dvec_memmap.bin', dtype=numpy.float32, mode='w+', shape=(len(pedobj.pedigree)))
+        dvec = 0.0
     except:
-        print('[ERROR]: Unable to allocate a matrix of rank %s in pyp_nrm.inbreeding_modified_meuwissen_luo()!' % ( l ))
-        logging.error('[ERROR]: Unable to allocate a matrix of rank %s in pyp_nrm.inbreeding_modified_meuwissen_luo()!', l)
-	return False
+        print('[ERROR]: Unable to allocate a matrix of rank %s in pyp_nrm/inbreeding_modified_meuwissen_luo()!' %
+              len(pedobj.pedigree))
+        logging.error('[ERROR]: Unable to allocate a matrix of rank %s in '
+                      'pyp_nrm/inbreeding_modified_meuwissen_luo()!', len(pedobj.pedigree))
+        return False
 
-    if pedobj.kw['debug_messages']: print('[DEBUG]: Starting loop over pedigree with ', len(pedobj.pedigree), ' animals')
+    if pedobj.kw['debug_messages']:
+        print('[DEBUG]: Starting loop over pedigree with ', len(pedobj.pedigree), ' animals')
     for i in range(len(pedobj.pedigree)):
-        if pedobj.kw['debug_messages']: print('\t[DEBUG]: Initializing local data structures for animal %s (idx: %s)' % \
-	    ( pedobj.pedigree[i].animalID, i))
+        if pedobj.kw['debug_messages']:
+            print('\t[DEBUG]: Initializing local data structures for animal %s (idx: %s)' %
+                  (pedobj.pedigree[i].animalID, i))
         ancs = []
-	ancd = []
+        ancd = []
         lvecs[:] = 0.0
-	lvecd[:] = 0
+        lvecd[:] = 0
 
         # We're using 0-indexing, so the little F0 = -1 trick that M&L use does not help us here.
         # Check for the most common case first -- both parents unknown
-        if pedobj.pedigree[i].sireID != pedobj.kw['missing_parent'] and pedobj.pedigree[i].damID != pedobj.kw['missing_parent']:
-            dvec[i] = 0.5 - ( 0.25 * ( fx[pedobj.pedigree[i].sireID] + fx[pedobj.pedigree[i].damID] ) )
+        if (pedobj.pedigree[i].sireID != pedobj.kw['missing_parent'] and
+                pedobj.pedigree[i].damID != pedobj.kw['missing_parent']):
+            dvec[i] = 0.5 - (0.25 * (fx[pedobj.pedigree[i].sireID] + fx[pedobj.pedigree[i].damID]))
         # Then check for both parents unknown
-        elif pedobj.pedigree[i].sireID == pedobj.kw['missing_parent'] and pedobj.pedigree[i].damID == pedobj.kw['missing_parent']:
-	    if pedobj.kw['debug_messages']: print('\t\t[DEBUG]: Animal %s (idx = %s) has unknown parents' % ( pedobj.pedigree[i].animalID, i ))
+        elif (pedobj.pedigree[i].sireID == pedobj.kw['missing_parent'] and
+              pedobj.pedigree[i].damID == pedobj.kw['missing_parent']):
+            if pedobj.kw['debug_messages']:
+                print('\t\t[DEBUG]: Animal %s (idx = %s) has unknown parents' % (pedobj.pedigree[i].animalID, i))
             dvec[i] = 1.0
         # Finally, deal with either a known sire, unknown dam or known dam, unknown sire.
         else:
-            # Knwon sire, unknown dam
-            if pedobj.pedigree[i].sireID != pedobj.kw['missing_parent'] and pedobj.pedigree[i].damID == pedobj.kw['missing_parent']:
-                dvec[i] = 0.5 - ( 0.25 * ( fx[pedobj.pedigree[i].sireID] - 1.0 ) )
-	    # Knowm dam, unknown sire
+            # Known sire, unknown dam
+            if (pedobj.pedigree[i].sireID != pedobj.kw['missing_parent'] and
+                    pedobj.pedigree[i].damID == pedobj.kw['missing_parent']):
+                dvec[i] = 0.5 - (0.25 * (fx[pedobj.pedigree[i].sireID] - 1.0))
+            # Known dam, unknown sire
             else:
-                dvec[i] = 0.5 - ( 0.25 * ( fx[pedobj.pedigree[i].damID] - 1.0 ) )
-        if pedobj.kw['debug_messages']: print('\t\t[DEBUG]: dvec[%s] = %s' % ( i, dvec[i] ))
+                dvec[i] = 0.5 - (0.25 * (fx[pedobj.pedigree[i].damID] - 1.0))
+                # if pedobj.kw['debug_messages']:
+                #    print('\t\t[DEBUG]: dvec[%s] = %s' % (i, dvec[i]))
         
         if pedobj.pedigree[i].sireID != pedobj.kw['missing_parent'] and pedobj.pedigree[i].sireID-1 not in ancs:
-	    ancs.append(pedobj.pedigree[i].sireID-1)
-	    if pedobj.kw['debug_messages']: print('\t\t[DEBUG]: Adding animal %s (idx: %s) to ancs' % ( pedobj.pedigree[i].sireID, pedobj.pedigree[i].sireID-1 ))
-	    lvecs[pedobj.pedigree[i].sireID-1] = 1.0
-	    if pedobj.kw['debug_messages']: print('\t\t[DEBUG]: lvecs[%s]: %s' % ( pedobj.pedigree[i].sireID-1, lvecs[pedobj.pedigree[i].sireID-1] ))
+            ancs.append(pedobj.pedigree[i].sireID-1)
+            if pedobj.kw['debug_messages']:
+                print('\t\t[DEBUG]: Adding animal %s (idx: %s) to ancs' % (pedobj.pedigree[i].sireID,
+                                                                           pedobj.pedigree[i].sireID-1))
+            lvecs[pedobj.pedigree[i].sireID-1] = 1.0
+            if pedobj.kw['debug_messages']:
+                print('\t\t[DEBUG]: lvecs[%s]: %s' % (pedobj.pedigree[i].sireID-1, lvecs[pedobj.pedigree[i].sireID-1]))
 
-	if pedobj.pedigree[i].damID != pedobj.kw['missing_parent'] and pedobj.pedigree[i].damID-1 not in ancd:
+        if pedobj.pedigree[i].damID != pedobj.kw['missing_parent'] and pedobj.pedigree[i].damID-1 not in ancd:
             ancd.append(pedobj.pedigree[i].damID-1)
-	    if pedobj.kw['debug_messages']: print('\t\t[DEBUG]: Adding animal %s (idx: %s) to ancd' % ( pedobj.pedigree[i].damID, pedobj.pedigree[i].damID-1 ))
+            if pedobj.kw['debug_messages']:
+                print('\t\t[DEBUG]: Adding animal %s (idx: %s) to ancd' % ( pedobj.pedigree[i].damID,
+                                                                            pedobj.pedigree[i].damID-1 ))
             lvecd[pedobj.pedigree[i].damID-1] = 1.0
-	    if pedobj.kw['debug_messages']: print('\t\t[DEBUG]: lvecd[%s]: %s' % ( pedobj.pedigree[i].damID-1, lvecd[pedobj.pedigree[i].damID-1] ))
+            if pedobj.kw['debug_messages']:
+                print('\t\t[DEBUG]: lvecd[%s]: %s' % (pedobj.pedigree[i].damID-1, lvecd[pedobj.pedigree[i].damID-1]))
 
-	# This loop was miserable to code due in large part to the publisher's decision to use two-point italic typefaces
-	# for setting subscripts. Thanks, CABI, that was awesome. It would have been much easier to read the text if 1) it
-        # has been larger, and 2) it has been typeset as an algorithm using proper indentation and notation. Lesson learned:
-	# use extreme magnification.
+        # This loop was miserable to code due in large part to the publisher's decision to use two-point italic typefaces
+        # for setting subscripts. Thanks, CABI, that was awesome. It would have been much easier to read the text if 1) it
+        # has been larger, and 2) it had been typeset as an algorithm using proper indentation and notation. Lesson learned:
+        # use extreme magnification.
         while len(ancs) > 0 and len(ancd) > 0:
             j = max(ancs)
             k = max(ancd)
-            if pedobj.kw['debug_messages']: print('\t\t[DEBUG]: j = %s (idx: %s)\tk = %s (idx: %s)' % ( pedobj.pedigree[j].animalID, \
-		j, pedobj.pedigree[k].animalID, k ))
-	    if j > k:
-	        if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: Animal: %s\tSire: %s\tDam: %s' % ( pedobj.pedigree[j].animalID, \
-		    pedobj.pedigree[j].sireID, pedobj.pedigree[j].damID ))
-		if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: Starting ANCS: %s' % ( ancs ))
+            if pedobj.kw['debug_messages']:
+                print('\t\t[DEBUG]: j = %s (idx: %s)\tk = %s (idx: %s)' % (pedobj.pedigree[j].animalID, j,
+                                                                           pedobj.pedigree[k].animalID, k))
+            if j > k:
+                if pedobj.kw['debug_messages']:
+                    print('\t\t\t[DEBUG]: Animal: %s\tSire: %s\tDam: %s' % (pedobj.pedigree[j].animalID,
+                                                                            pedobj.pedigree[j].sireID,
+                                                                            pedobj.pedigree[j].damID))
+                if pedobj.kw['debug_messages']:
+                    print('\t\t\t[DEBUG]: Starting ANCS: %s' % ancs)
+                # Non-missing sire
                 if pedobj.pedigree[j].sireID != pedobj.kw['missing_parent'] and pedobj.pedigree[j].sireID-1 not in ancs:
                     ancs.append(pedobj.pedigree[j].sireID-1)
-		    if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: Adding animal %s (idx: %s) to ancs' % ( pedobj.pedigree[j].sireID, \
-			pedobj.pedigree[j].sireID-1 ))
-                lvecs[pedobj.pedigree[j].sireID-1] = lvecs[pedobj.pedigree[j].sireID-1] + ( 0.5 * lvecs[j] )
-		if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: lvecs[%s]: %s' % ( pedobj.pedigree[j].sireID-1, lvecs[pedobj.pedigree[j].sireID-1] ))
-		if pedobj.pedigree[j].damID != pedobj.kw['missing_parent'] and pedobj.pedigree[j].damID-1 not in ancs:
+                    if pedobj.kw['debug_messages']:
+                        print('\t\t\t[DEBUG]: Adding animal %s (idx: %s) to ancs' % (pedobj.pedigree[j].sireID,
+                                                                                     pedobj.pedigree[j].sireID-1))
+                    lvecs[pedobj.pedigree[j].sireID-1] = lvecs[pedobj.pedigree[j].sireID-1] + (0.5 * lvecs[j])
+                    if pedobj.kw['debug_messages']:
+                        print('\t\t\t[DEBUG]: lvecs[%s]: %s' % (pedobj.pedigree[j].sireID-1,
+                                                                lvecs[pedobj.pedigree[j].sireID-1]))
+                # Non-missing dam
+                if pedobj.pedigree[j].damID != pedobj.kw['missing_parent'] and pedobj.pedigree[j].damID-1 not in ancs:
                     ancs.append(pedobj.pedigree[j].damID-1)
-		    if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: Adding animal %s (idx: %s) to ancs' % ( pedobj.pedigree[j].damID, \
-			pedobj.pedigree[j].damID-1 ))
-                lvecs[pedobj.pedigree[j].damID-1] = lvecs[pedobj.pedigree[j].damID-1] + ( 0.5 * lvecs[j] )
-		if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: lvecs[%s]: %s' % ( pedobj.pedigree[j].damID-1, lvecs[pedobj.pedigree[j].damID-1] ))
-	        ancs.remove(j)
-		if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: Ending ANCS: %s' % ( ancs ))
+                    if pedobj.kw['debug_messages']:
+                        print('\t\t\t[DEBUG]: Adding animal %s (idx: %s) to ancs' % (pedobj.pedigree[j].damID,
+                                                                                     pedobj.pedigree[j].damID-1))
+                    lvecs[pedobj.pedigree[j].damID-1] = lvecs[pedobj.pedigree[j].damID-1] + (0.5 * lvecs[j])
+                    if pedobj.kw['debug_messages']:
+                        print('\t\t\t[DEBUG]: lvecs[%s]: %s' % (pedobj.pedigree[j].damID-1,
+                                                                lvecs[pedobj.pedigree[j].damID-1]))
+                ancs.remove(j)
+                if pedobj.kw['debug_messages']:
+                    print('\t\t\t[DEBUG]: Ending ANCS: %s' % ancs)
 
             elif k > j:
-		if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: Animal: %s\tSire: %s\tDam: %s' % ( pedobj.pedigree[k].animalID, \
-		    pedobj.pedigree[k].sireID, pedobj.pedigree[k].damID ))
-		if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: Starting ANCD: %s' % ( ancd ))
+                if pedobj.kw['debug_messages']:
+                    print('\t\t\t[DEBUG]: Animal: %s\tSire: %s\tDam: %s' % (pedobj.pedigree[k].animalID,
+                                                                            pedobj.pedigree[k].sireID,
+                                                                            pedobj.pedigree[k].damID))
+                if pedobj.kw['debug_messages']:
+                    print('\t\t\t[DEBUG]: Starting ANCD: %s' % ancd)
                 if pedobj.pedigree[k].sireID != pedobj.kw['missing_parent'] and pedobj.pedigree[k].sireID-1 not in ancd:
                     ancd.append(pedobj.pedigree[k].sireID-1)
-		    if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: Adding animal %s (idx: %s) to ancd' % ( pedobj.pedigree[k].sireID, \
-			pedobj.pedigree[k].sireID-1 ))
-                lvecd[pedobj.pedigree[k].sireID-1] = lvecd[pedobj.pedigree[k].sireID-1] + ( 0.5 * lvecd[k] )
-		if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: lvecd[%s]: %s' % ( pedobj.pedigree[k].sireID-1, lvecd[pedobj.pedigree[k].sireID-1] ))
+                if pedobj.kw['debug_messages']:
+                    print('\t\t\t[DEBUG]: Adding animal %s (idx: %s) to ancd' % (pedobj.pedigree[k].sireID,
+                                                                                 pedobj.pedigree[k].sireID-1))
+                lvecd[pedobj.pedigree[k].sireID-1] = lvecd[pedobj.pedigree[k].sireID-1] + (0.5 * lvecd[k])
+                if pedobj.kw['debug_messages']:
+                    print('\t\t\t[DEBUG]: lvecd[%s]: %s' % (pedobj.pedigree[k].sireID-1,
+                                                            lvecd[pedobj.pedigree[k].sireID-1]))
                 if pedobj.pedigree[k].damID != pedobj.kw['missing_parent'] and pedobj.pedigree[k].damID-1 not in ancd:
                     ancd.append(pedobj.pedigree[k].damID-1)
-		    if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: Adding animal %s (idx: %s) to ancd' % ( pedobj.pedigree[k].damID, \
-			pedobj.pedigree[k].damID-1 ))
-                lvecd[pedobj.pedigree[k].damID-1] = lvecd[pedobj.pedigree[k].damID-1] + ( 0.5 * lvecd[k] )
-		if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: lvecd[%s]: %s' % ( pedobj.pedigree[k].damID-1, lvecd[pedobj.pedigree[k].damID-1] ))
+                if pedobj.kw['debug_messages']:
+                    print('\t\t\t[DEBUG]: Adding animal %s (idx: %s) to ancd' % (pedobj.pedigree[k].damID,
+                                                                                 pedobj.pedigree[k].damID-1))
+                lvecd[pedobj.pedigree[k].damID-1] = lvecd[pedobj.pedigree[k].damID-1] + (0.5 * lvecd[k])
+                if pedobj.kw['debug_messages']:
+                    print('\t\t\t[DEBUG]: lvecd[%s]: %s' % (pedobj.pedigree[k].damID-1, lvecd[pedobj.pedigree[k].damID-1]))
                 ancd.remove(k)
-		if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: Ending ANCD: %s' % ( ancd ))
+                if pedobj.kw['debug_messages']:
+                    print('\t\t\t[DEBUG]: Ending ANCD: %s' % ancd)
 
-	    else:
-		if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: The next youngest ancestor, %s (idx: %s), is a common ancestor' % \
-		    ( pedobj.pedigree[j].animalID, j ))
-		if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: Animal: %s\tSire: %s\tDam: %s' % ( pedobj.pedigree[k].animalID, \
-		    pedobj.pedigree[k].sireID, pedobj.pedigree[k].damID ))
-		if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: Ending ANCS: %s' % ( ancs ))
-		if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: Ending ANCD: %s' % ( ancd ))
-		# If the sire is known
-		if pedobj.pedigree[j].sireID != pedobj.kw['missing_parent']:
-		    if pedobj.pedigree[j].sireID-1 not in ancs:
+            else:
+                if pedobj.kw['debug_messages']:
+                    print('\t\t\t[DEBUG]: The next youngest ancestor, %s (idx: %s), is a common ancestor' %
+                          (pedobj.pedigree[j].animalID, j))
+                if pedobj.kw['debug_messages']:
+                    print('\t\t\t[DEBUG]: Animal: %s\tSire: %s\tDam: %s' % (pedobj.pedigree[k].animalID,
+                                                                            pedobj.pedigree[k].sireID,
+                                                                            pedobj.pedigree[k].damID))
+                if pedobj.kw['debug_messages']:
+                    print('\t\t\t[DEBUG]: Ending ANCS: %s' % ancs)
+                if pedobj.kw['debug_messages']:
+                    print('\t\t\t[DEBUG]: Ending ANCD: %s' % ancd)
+
+                # If the sire is known
+                if pedobj.pedigree[j].sireID != pedobj.kw['missing_parent']:
+                    if pedobj.pedigree[j].sireID-1 not in ancs:
                         ancs.append(pedobj.pedigree[j].sireID-1)
-		        if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: Adding animal %s (idx: %s) to ancs' % \
-			    ( pedobj.pedigree[j].sireID, pedobj.pedigree[j].sireID-1 ))
-                    lvecs[pedobj.pedigree[j].sireID-1] = lvecs[pedobj.pedigree[j].sireID-1] + ( 0.5 * lvecs[j] )
-		    if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: lvec[%s]: %s' % ( pedobj.pedigree[i].sireID-1, \
-			lvecs[pedobj.pedigree[i].sireID-1] ))
-		    if pedobj.pedigree[j].sireID-1 not in ancd:
-  		        ancd.append(pedobj.pedigree[j].sireID-1)
-		        if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: Adding animal %s (idx: %s) to ancd' % \
-			    ( pedobj.pedigree[j].sireID, pedobj.pedigree[j].sireID-1 ))
-                    lvecd[pedobj.pedigree[j].sireID-1] = lvecd[pedobj.pedigree[j].sireID-1] + ( 0.5 * lvecd[j] )
-		    if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: lvec[%s]: %s' % ( pedobj.pedigree[j].sireID-1, \
-			lvecd[pedobj.pedigree[j].sireID-1] ))
-		# If the dam is known
-		if pedobj.pedigree[j].damID != pedobj.kw['missing_parent']:
-		    if pedobj.pedigree[j].damID-1 not in ancs:
+                        if pedobj.kw['debug_messages']:
+                            print('\t\t\t[DEBUG]: Adding animal %s (idx: %s) to ancs' % (pedobj.pedigree[j].sireID,
+                                                                                         pedobj.pedigree[j].sireID-1))
+                        lvecs[pedobj.pedigree[j].sireID-1] = lvecs[pedobj.pedigree[j].sireID-1] + (0.5 * lvecs[j])
+                        if pedobj.kw['debug_messages']:
+                            print('\t\t\t[DEBUG]: lvec[%s]: %s' % (pedobj.pedigree[j].sireID-1,
+                                                                   lvecs[pedobj.pedigree[j].sireID-1]))
+                    if pedobj.pedigree[j].sireID-1 not in ancd:
+                        ancd.append(pedobj.pedigree[j].sireID-1)
+                        if pedobj.kw['debug_messages']:
+                            print('\t\t\t[DEBUG]: Adding animal %s (idx: %s) to ancd' % (pedobj.pedigree[j].sireID,
+                                                                                         pedobj.pedigree[j].sireID-1))
+                        lvecd[pedobj.pedigree[j].sireID-1] = lvecd[pedobj.pedigree[j].sireID-1] + (0.5 * lvecd[j])
+                        if pedobj.kw['debug_messages']:
+                            print('\t\t\t[DEBUG]: lvec[%s]: %s' % (pedobj.pedigree[j].sireID-1,
+                                                                   lvecd[pedobj.pedigree[j].sireID-1]))
+                # If the dam is known
+                if pedobj.pedigree[j].damID != pedobj.kw['missing_parent']:
+                    if pedobj.pedigree[j].damID-1 not in ancs:
                         ancs.append(pedobj.pedigree[j].damID-1)
-		        if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: Adding animal %s (idx: %s) to ancs' % \
-			    ( pedobj.pedigree[j].damID, pedobj.pedigree[j].damID-1 ))
-                    lvecs[pedobj.pedigree[j].damID-1] = lvecs[pedobj.pedigree[j].damID-1] + ( 0.5 * lvecs[j] )
-                    if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: lvec[%s]: %s' % ( pedobj.pedigree[j].damID-1, \
-			lvecs[pedobj.pedigree[j].damID-1] ))
-		    if pedobj.pedigree[j].damID-1 not in ancd:
+                        if pedobj.kw['debug_messages']:
+                            print('\t\t\t[DEBUG]: Adding animal %s (idx: %s) to ancs' % (pedobj.pedigree[j].damID,
+                                                                                         pedobj.pedigree[j].damID-1))
+                        lvecs[pedobj.pedigree[j].damID-1] = lvecs[pedobj.pedigree[j].damID-1] + (0.5 * lvecs[j])
+                        if pedobj.kw['debug_messages']:
+                            print('\t\t\t[DEBUG]: lvec[%s]: %s' % (pedobj.pedigree[j].damID-1,
+                                                                   lvecs[pedobj.pedigree[j].damID-1]))
+                    if pedobj.pedigree[j].damID-1 not in ancd:
                         ancd.append(pedobj.pedigree[j].damID-1)
-		        if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: Adding animal %s (idx: %s) to ancd' % \
-			    ( pedobj.pedigree[j].damID, pedobj.pedigree[j].damID-1 ))
-                    lvecd[pedobj.pedigree[j].damID-1] = lvecd[pedobj.pedigree[j].damID-1] + ( 0.5 * lvecd[j] )
-		    if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: lvec[%s]: %s' % ( pedobj.pedigree[j].damID-1, \
-			lvecd[pedobj.pedigree[j].damID-1] ))
- 	        fx[pedobj.pedigree[i].animalID] = fx[pedobj.pedigree[i].animalID] + ( lvecs[j] * lvecd[j] * 0.5 * dvec[j] )
-		if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: fx[%s] = %s * %s * 0.5 * %s = %s' % ( pedobj.pedigree[i].animalID, \
-		    lvecs[j], lvecd[j], dvec[j], fx[pedobj.pedigree[i].animalID] ))
-		if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: dvec   = %s' % ( dvec ))
-		if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: lvecs  = %s' % ( lvecs ))
-		if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: lvecd  = %s' % ( lvecd ))
-	        ancs.remove(j)
-		if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: Ending ANCS: %s' % ( ancs ))
- 	        ancd.remove(j)
-		if pedobj.kw['debug_messages']: print('\t\t\t[DEBUG]: Ending ANCD: %s' % ( ancd ))
+                        if pedobj.kw['debug_messages']:
+                            print('\t\t\t[DEBUG]: Adding animal %s (idx: %s) to ancd' % (pedobj.pedigree[j].damID,
+                                                                                         pedobj.pedigree[j].damID-1))
+                        lvecd[pedobj.pedigree[j].damID-1] = lvecd[pedobj.pedigree[j].damID-1] + (0.5 * lvecd[j])
+                        if pedobj.kw['debug_messages']:
+                            print('\t\t\t[DEBUG]: lvec[%s]: %s' % (pedobj.pedigree[j].damID-1,
+                                                                   lvecd[pedobj.pedigree[j].damID-1]))
+                fx[pedobj.pedigree[i].animalID] = (fx[pedobj.pedigree[i].animalID] +
+                                                   (lvecs[j] * lvecd[j] * 0.5 * dvec[j]))
+                if pedobj.kw['debug_messages']:
+                    print('\t\t\t[DEBUG]: fx[%s] = %s * %s * 0.5 * %s = %s' % (pedobj.pedigree[i].animalID,
+                                                                               lvecs[j],
+                                                                               lvecd[j],
+                                                                               dvec[j],
+                                                                               fx[pedobj.pedigree[i].animalID]))
+                if pedobj.kw['debug_messages']:
+                    print('\t\t\t[DEBUG]: dvec   = %s' % dvec)
+                if pedobj.kw['debug_messages']:
+                    print('\t\t\t[DEBUG]: lvecs  = %s' % lvecs)
+                if pedobj.kw['debug_messages']:
+                    print('\t\t\t[DEBUG]: lvecd  = %s' % lvecd)
+                ancs.remove(j)
+                if pedobj.kw['debug_messages']:
+                    print('\t\t\t[DEBUG]: Ending ANCS: %s' % ancs)
+                ancd.remove(j)
+                if pedobj.kw['debug_messages']:
+                    print('\t\t\t[DEBUG]: Ending ANCD: %s' % ancd)
 
     # We need to clean-up so that we don't have things like memory-ammped files laying around.
-    del lvecs; del lvecd; del avec; del dvec
-    try: logging.info('Exited inbreeding_modified_meuwissen_luo()')
-    except: pass
+    del lvecs
+    del lvecd
+    del avec
+    del dvec
+
+    logging.info('Exited pyp_nrm/inbreeding_modified_meuwissen_luo()')
+
     return fx
+
 
 ##
 # Form the decomposed form of A, TDT', directly from a pedigree (after
@@ -1580,7 +1647,7 @@ def a_decompose(pedobj):
     except: pass
     l = pedobj.metadata.num_records
 
-    if not ( pedobj.kw['form_nrm'] and pedobj.nrm.nrm.shape[0] == pedobj.metadata.num_records ):
+    if not (pedobj.kw['form_nrm'] and pedobj.nrm.nrm.shape[0] == pedobj.metadata.num_records):
         if pedobj.kw['nrm_method'] == 'nrm':
             a = fast_a_matrix(pedobj.pedigree, pedobj.kw, method=pedobj.kw['matrix_type'])
         else:
@@ -1589,82 +1656,87 @@ def a_decompose(pedobj):
         a = pedobj.nrm
 
     try:
-        T = numpy.identity(l, dtype=numpy.float)
-        D = numpy.identity(l, dtype=numpy.float)
+        T = numpy.identity(l, dtype=numpy.float32)
+        D = numpy.identity(l, dtype=numpy.float32)
         for row in range(l):
             for col in range(row+1):
-                # cast these b/c items are read from the pedigree file as characters, not  integers
+                # cast these b/c items are read from the pedigree file as characters, not integers
                 pedobj.pedigree[col].animalID = int(pedobj.pedigree[col].animalID)
                 pedobj.pedigree[col].sireID = int(pedobj.pedigree[col].sireID)
                 pedobj.pedigree[col].damID = int(pedobj.pedigree[col].damID)
-                if pedobj.pedigree[row].sireID == pedobj.kw['missing_parent'] and pedobj.pedigree[row].damID == pedobj.kw['missing_parent']:
+                if (pedobj.pedigree[row].sireID == pedobj.kw['missing_parent'] and
+                        pedobj.pedigree[row].damID == pedobj.kw['missing_parent']):
                     if row == col:
                         # both parents unknown and assumed unrelated
-                        T[row,col] = 1.
-                        D[row,col] = 1.
+                        T[row, col] = 1.
+                        D[row, col] = 1.
                     else:
-                        T[row,col] = 0.
+                        T[row, col] = 0.
                 elif pedobj.pedigree[row].sireID == pedobj.kw['missing_parent']:
                     # sire unknown, dam known
                     if row == col:
-                        T[row,col] = 1.
-                        fd = a[pedobj.pedigree[row].damID-1,pedobj.pedigree[row].damID-1] - 1.
-                        D[row,col] = 0.75 - ( 0.5 * fd )
+                        T[row, col] = 1.
+                        fd = a[pedobj.pedigree[row].damID-1, pedobj.pedigree[row].damID-1] - 1.
+                        D[row, col] = 0.75 - (0.5 * fd)
                     else:
-                        T[row,col] = 0.5 * T[pedobj.pedigree[row].damID-1,col]
+                        T[row, col] = 0.5 * T[pedobj.pedigree[row].damID-1, col]
                 elif pedobj.pedigree[row].damID == pedobj.kw['missing_parent']:
                     # sire known, dam unknown
                     if row == col:
-                        T[row,col] = 1.
-                        fs = a[pedobj.pedigree[row].sireID-1,pedobj.pedigree[row].sireID-1] - 1.
-                        D[row,col] = 0.75 - ( 0.5 * fs )
+                        T[row, col] = 1.
+                        fs = a[pedobj.pedigree[row].sireID-1, pedobj.pedigree[row].sireID-1] - 1.
+                        D[row, col] = 0.75 - (0.5 * fs)
                     else:
-                        T[row,col] = 0.5 * T[pedobj.pedigree[row].sireID-1,col]
-                elif pedobj.pedigree[row].sireID != pedobj.kw['missing_parent'] and pedobj.pedigree[row].damID != pedobj.kw['missing_parent']:
+                        T[row, col] = 0.5 * T[pedobj.pedigree[row].sireID-1, col]
+                elif (pedobj.pedigree[row].sireID != pedobj.kw['missing_parent'] and
+                      pedobj.pedigree[row].damID != pedobj.kw['missing_parent']):
                     # both parents known
                     if row == col:
-                        T[row,col] = 1.
-                        fs = a[pedobj.pedigree[row].sireID-1,pedobj.pedigree[row].sireID-1] - 1.
-                        fd = a[pedobj.pedigree[row].damID-1,pedobj.pedigree[row].damID-1] - 1.
-                        D[row,col] = 0.5 - ( 0.25 * ( fs + fd ) )
+                        T[row, col] = 1.
+                        fs = a[pedobj.pedigree[row].sireID-1, pedobj.pedigree[row].sireID-1] - 1.
+                        fd = a[pedobj.pedigree[row].damID-1, pedobj.pedigree[row].damID-1] - 1.
+                        D[row, col] = 0.5 - (0.25 * (fs + fd ))
                     else:
-                        T[row,col] = 0.5 * ( T[int(pedobj.pedigree[row].sireID)-1,col] + T[int(pedobj.pedigree[row].damID)-1,col] )
+                        T[row, col] = 0.5 * (T[int(pedobj.pedigree[row].sireID)-1, col] +
+                                             T[int(pedobj.pedigree[row].damID)-1, col])
                 else:
-                    print('[ERROR]: There is a problem with the sire (ID %s) and/or dam (ID %s) of animal %s' % (pedobj.pedigree[col].sireID,pedobj.pedigree[col].damID,pedobj.pedigree[col].animalID))
+                    print('[ERROR]: There is a problem with the sire (ID %s) and/or dam (ID %s) of animal %s' %
+                          (pedobj.pedigree[col].sireID, pedobj.pedigree[col].damID, pedobj.pedigree[col].animalID))
                     break
     except:
-        D = numpy.identity(1, dtype=numpy.float)
-        T = numpy.identity(1, dtype=numpy.float)
+        D = numpy.identity(1, dtype=numpy.float32)
+        T = numpy.identity(1, dtype=numpy.float32)
 
-    outputfile = '%s%s%s' % (pedobj.kw['filetag'],'_a_decompose_d_','.dat')
-    aout = open(outputfile,'w')
+    outputfile = '%s%s%s' % (pedobj.kw['filetag'], '_a_decompose_d_', '.dat')
+    aout = open(outputfile, 'w')
     for row in range(l):
         line = ''
         for col in range(l):
             if col == 0:
-                line = '%7.5f' % (D[row,col])
+                line = '%7.5f' % (D[row, col])
             else:
-                line = '%s%s%s' % (line,',',D[row,col])
-        line = '%s%s' % (line,'\n')
+                line = '%s%s%s' % (line, ',', D[row, col])
+        line = '%s%s' % (line, '\n')
         aout.write(line)
     aout.close()
 
-    outputfile = '%s%s%s' % (pedobj.kw['filetag'],'_a_decompose_t_','.dat')
-    aout = open(outputfile,'w')
+    outputfile = '%s%s%s' % (pedobj.kw['filetag'], '_a_decompose_t_', '.dat')
+    aout = open(outputfile, 'w')
     for row in range(l):
         line = ''
         for col in range(l):
             if col == 0:
-                line = '%7.5f' % (T[row,col])
+                line = '%7.5f' % (T[row, col])
             else:
-                line = '%s%s%s' % (line,',',T[row,col])
-        line = '%s%s' % (line,'\n')
+                line = '%s%s%s' % (line, ',', T[row, col])
+        line = '%s%s' % (line, '\n')
         aout.write(line)
     aout.close()
 
-    try: logging.info('Exited a_decompose()')
-    except: pass
-    return D,T
+    logging.info('Exited pyp_nrm/a_decompose()')
+
+    return D, T
+
 
 ##
 # Form the diagonal matrix, D, used in decomposing A and forming the direct
@@ -1682,49 +1754,53 @@ def form_d_nof(pedobj):
     used by other functions.  Note that inbreeding is not considered in the
     formation of D.
     """
-    try: logging.info('Entered form_d_nof()')
-    except: pass
+    logging.info('Entered pyp_nrm/form_d_nof()')
     try:
         l = pedobj.metadata.num_records
-        D = numpy.identity(l, dtype=numpy.float)
+        D = numpy.identity(l, dtype=numpy.float32)
         for row in range(l):
             for col in range(row+1):
                 # cast these b/c items are read from the pedigree file as characters, not integers
                 pedobj.pedigree[col].animalID = int(pedobj.pedigree[col].animalID)
                 pedobj.pedigree[col].sireID = int(pedobj.pedigree[col].sireID)
                 pedobj.pedigree[col].damID = int(pedobj.pedigree[col].damID)
-                if pedobj.pedigree[row].sireID == pedobj.kw['missing_parent'] and pedobj.pedigree[row].damID == pedobj.kw['missing_parent']:
+                if (pedobj.pedigree[row].sireID == pedobj.kw['missing_parent'] and
+                        pedobj.pedigree[row].damID == pedobj.kw['missing_parent']):
                     if row == col:
                         # both parents unknown and assumed unrelated
-                        D[row,col] = 1.
+                        D[row, col] = 1.
                     else:
                         pass
                 elif pedobj.pedigree[row].sireID == pedobj.kw['missing_parent']:
                     # sire unknown, dam known
                     if row == col:
-                        D[row,col] = 0.75
+                        D[row, col] = 0.75
                     else:
                         pass
                 elif pedobj.pedigree[row].damID == pedobj.kw['missing_parent']:
                     # sire known, dam unknown
                     if row == col:
-                        D[row,col] = 0.75
+                        D[row, col] = 0.75
                     else:
                         pass
-                elif pedobj.pedigree[row].sireID != pedobj.kw['missing_parent'] and pedobj.pedigree[row].damID != pedobj.kw['missing_parent']:
+                elif (pedobj.pedigree[row].sireID != pedobj.kw['missing_parent'] and
+                      pedobj.pedigree[row].damID != pedobj.kw['missing_parent']):
                     # both parents known
                     if row == col:
-                        D[row,col] = 0.5
+                        D[row, col] = 0.5
                     else:
                         pass
                 else:
-                    print('[ERROR]: There is a problem with the sire (ID %s) and/or dam (ID %s) of animal %s' % (pedobj.pedigree[col].sireID,pedobj.pedigree[col].damID,pedobj.pedigree[col].animalID))
+                    print('[ERROR]: There is a problem with the sire (ID %s) and/or dam (ID %s) of animal %s' %
+                          (pedobj.pedigree[col].sireID, pedobj.pedigree[col].damID, pedobj.pedigree[col].animalID))
                     break
     except:
-        D = numpy.identity(1,dtype=numpy.float)
-    try: logging.info('Exited form_d_nof()')
-    except: pass
+        D = numpy.identity(1, dtype=numpy.float32)
+
+    logging.info('Exited pyp_nrm/form_d_nof()')
+
     return D
+
 
 ##
 # Form the inverse of A directly using the method of Henderson (1976) which
@@ -1732,20 +1808,19 @@ def form_d_nof(pedobj):
 # @param pedobj A PyPedal pedigree object.
 # @param filetag Prefix added to output file names.
 # @retval The inverse of the NRM, A, not accounting for inbreeding.
-def a_inverse_dnf(pedobj,filetag='_a_inverse_dnf_'):
+def a_inverse_dnf(pedobj, filetag='_a_inverse_dnf_'):
     """
     Form the inverse of A directly using the method of Henderson (1976) which
     does not account for inbreeding.
     """
-    try: logging.info('Entered a_inverse_dnf()')
-    except: pass
+    logging.info('Entered pyp_nrm/a_inverse_dnf()')
     l = pedobj.metadata.num_records
     try:
         # grab the diagonal matrix, d, and form its inverse
         d_inv = form_d_nof(pedobj)
         for i in range(l):
-            d_inv[i,i] = 1. / d_inv[i,i]
-        a_inv = numpy.zeros([l,l], dtype=numpy.float)
+            d_inv[i, i] = 1. / d_inv[i, i]
+        a_inv = numpy.zeros([l, l], dtype=numpy.float)
         for i in range(l):
             # cast these b/c items are read from the pedigree file as characters, not integers
             pedobj.pedigree[i].animalID = int(pedobj.pedigree[i].animalID)
@@ -1753,67 +1828,71 @@ def a_inverse_dnf(pedobj,filetag='_a_inverse_dnf_'):
             pedobj.pedigree[i].damID = int(pedobj.pedigree[i].damID)
             s = pedobj.pedigree[i].sireID-1
             d = pedobj.pedigree[i].damID-1
-            if pedobj.pedigree[i].sireID == pedobj.kw['missing_parent'] and pedobj.pedigree[i].damID == pedobj.kw['missing_parent']:
+            if (pedobj.pedigree[i].sireID == pedobj.kw['missing_parent'] and
+                    pedobj.pedigree[i].damID == pedobj.kw['missing_parent']):
                 # both parents unknown and assumed unrelated
-                a_inv[i,i] = a_inv[i,i] + d_inv[i,i]
+                a_inv[i, i] = a_inv[i, i] + d_inv[i, i]
             elif pedobj.pedigree[i].sireID == pedobj.kw['missing_parent']:
                 # sire unknown, dam known
-                a_inv[i,i] = a_inv[i,i] + d_inv[i,i]
-                a_inv[d,i] = a_inv[d,i] + ( (-0.5) * d_inv[i,i] )
-                a_inv[i,d] = a_inv[i,d] + ( (-0.5) * d_inv[i,i] )
-                a_inv[d,d] = a_inv[d,d] + ( 0.25 * d_inv[i,i] )
+                a_inv[i, i] = a_inv[i, i] + d_inv[i, i]
+                a_inv[d, i] = a_inv[d, i] + ((-0.5) * d_inv[i, i])
+                a_inv[i, d] = a_inv[i, d] + ((-0.5) * d_inv[i, i])
+                a_inv[d, d] = a_inv[d, d] + (0.25 * d_inv[i, i])
             elif pedobj.pedigree[i].damID == pedobj.kw['missing_parent']:
                 # sire known, dam unknown
-                a_inv[i,i] = a_inv[i,i] + d_inv[i,i]
-                a_inv[s,i] = a_inv[s,i] + ( (-0.5) * d_inv[i,i] )
-                a_inv[i,s] = a_inv[i,s] + ( (-0.5) * d_inv[i,i] )
-                a_inv[s,s] = a_inv[s,s] + ( 0.25 * d_inv[i,i] )
-            elif pedobj.pedigree[i].sireID != pedobj.kw['missing_parent'] and pedobj.pedigree[i].damID != pedobj.kw['missing_parent']:
+                a_inv[i, i] = a_inv[i, i] + d_inv[i, i]
+                a_inv[s, i] = a_inv[s, i] + ((-0.5) * d_inv[i, i])
+                a_inv[i, s] = a_inv[i, s] + ((-0.5) * d_inv[i, i])
+                a_inv[s, s] = a_inv[s, s] + (0.25 * d_inv[i, i])
+            elif (pedobj.pedigree[i].sireID != pedobj.kw['missing_parent'] and
+                  pedobj.pedigree[i].damID != pedobj.kw['missing_parent']):
                 # both parents known
-                a_inv[i,i] = a_inv[i,i] + d_inv[i,i]
-                a_inv[s,i] = a_inv[s,i] + ( (-0.5) * d_inv[i,i] )
-                a_inv[i,s] = a_inv[i,s] + ( (-0.5) * d_inv[i,i] )
-                a_inv[d,i] = a_inv[d,i] + ( (-0.5) * d_inv[i,i] )
-                a_inv[i,d] = a_inv[i,d] + ( (-0.5) * d_inv[i,i] )
-                a_inv[s,s] = a_inv[s,s] + ( 0.25 * d_inv[i,i] )
-                a_inv[s,d] = a_inv[s,d] + ( 0.25 * d_inv[i,i] )
-                a_inv[d,s] = a_inv[d,s] + ( 0.25 * d_inv[i,i] )
-                a_inv[d,d] = a_inv[d,d] + ( 0.25 * d_inv[i,i] )
+                a_inv[i, i] = a_inv[i, i] + d_inv[i, i]
+                a_inv[s, i] = a_inv[s, i] + ((-0.5) * d_inv[i, i])
+                a_inv[i, s] = a_inv[i, s] + ((-0.5) * d_inv[i, i])
+                a_inv[d, i] = a_inv[d, i] + ((-0.5) * d_inv[i, i])
+                a_inv[i, d] = a_inv[i, d] + ((-0.5) * d_inv[i, i])
+                a_inv[s, s] = a_inv[s, s] + (0.25 * d_inv[i, i])
+                a_inv[s, d] = a_inv[s, d] + (0.25 * d_inv[i, i])
+                a_inv[d, s] = a_inv[d, s] + (0.25 * d_inv[i, i])
+                a_inv[d, d] = a_inv[d, d] + (0.25 * d_inv[i, i])
             else:
-                print('[ERROR]: There is a problem with the sire (ID %s) and/or dam (ID %s) of animal %s' % (pedobj.pedigree[col].sireID,pedobj.pedigree[col].damID,pedobj.pedigree[col].animalID))
+                print('[ERROR]: There is a problem with the sire (ID %s) and/or dam (ID %s) of animal %s' %
+                      (pedobj.pedigree[i].sireID, pedobj.pedigree[i].damID, pedobj.pedigree[i].animalID))
                 break
     except:
-        a_inv = numpy.zeros([1,1],dtype=numpy.float)
+        a_inv = numpy.zeros([1, 1], dtype=numpy.float32)
 
-    outputfile = '%s%s%s' % (pedobj.kw['filetag'],'_a_inverse_dnf_a_inv','.dat')
-    aout = open(outputfile,'w')
+    outputfile = '%s%s%s' % (pedobj.kw['filetag'], '_a_inverse_dnf_a_inv', '.dat')
+    aout = open(outputfile, 'w')
     for row in range(l):
         line = ''
         for col in range(l):
             if col == 0:
-                line = '%7.5f' % (a_inv[row,col])
+                line = '%7.5f' % a_inv[row, col]
             else:
-                line = '%s%s%s' % (line,',',a_inv[row,col])
-        line = '%s%s' % (line,'\n')
+                line = '%s%s%s' % (line, ',', a_inv[row, col])
+        line = '%s%s' % (line, '\n')
         aout.write(line)
     aout.close()
 
-    outputfile = '%s%s%s' % (pedobj.kw['filetag'],'_a_inverse_dnf_d_inv','.dat')
-    aout = open(outputfile,'w')
+    outputfile = '%s%s%s' % (pedobj.kw['filetag'], '_a_inverse_dnf_d_inv', '.dat')
+    aout = open(outputfile, 'w')
     for row in range(l):
         line = ''
         for col in range(l):
             if col == 0:
-                line = '%7.5f' % (d_inv[row,col])
+                line = '%7.5f' % d_inv[row,col]
             else:
-                line = '%s%s%s' % (line,',',d_inv[row,col])
-        line = '%s%s' % (line,'\n')
+                line = '%s%s%s' % (line, ',', d_inv[row, col])
+        line = '%s%s' % (line, '\n')
         aout.write(line)
     aout.close()
 
-    try: logging.info('Exited a_inverse_dnf()')
-    except: pass
+    logging.info('Exited pyp_nrm/a_inverse_dnf()')
+
     return a_inv
+
 
 ##
 # Directly form the inverse of A from the pedigree file - accounts for
@@ -1825,17 +1904,14 @@ def a_inverse_df(pedobj):
     Directly form the inverse of A from the pedigree file - accounts for
     inbreeding - using the method of Quaas (1976).
     """
-    try:
-        logging.info('Entered a_inverse_df()')
-    except:
-        pass
+    logging.info('Entered pyp_nrm/a_inverse_df()')
     l = pedobj.metadata.num_records
     try:
         from math import sqrt
         # Grab some array tools
-        d_inv = numpy.zeros([l,l], dtype=numpy.float)
-        a_inv = numpy.zeros([l,l], dtype=numpy.float)
-        LL = numpy.zeros([l,l], dtype=numpy.float)
+        d_inv = numpy.zeros([l, l], dtype=numpy.float32)
+        a_inv = numpy.zeros([l, l], dtype=numpy.float32)
+        LL = numpy.zeros([l, l], dtype=numpy.float32)
         # Form L and D-inverse
         for row in range(l):
             for col in range(row+1):
@@ -1848,98 +1924,100 @@ def a_inverse_df(pedobj):
                 s_sq = d_sq = 0.
                 if row == col:
                     for m in range(s+1):
-                        s_sq = s_sq + ( LL[s,m] * LL[s,m] )
+                        s_sq = s_sq + (LL[s, m] * LL[s, m])
                     s_sq = 0.25 * s_sq
                     for m in range(d+1):
-                        d_sq = d_sq + ( LL[d,m] * LL[d,m] )
+                        d_sq = d_sq + (LL[d, m] * LL[d, m])
                     d_sq = 0.25 * d_sq
                     LL[row,col] = sqrt(1. - s_sq - d_sq)
-                    d_inv[row,col] = 1. / ( LL[row,col] * LL[row,col] )
+                    d_inv[row,col] = 1. / (LL[row, col] * LL[row, col])
                 else:
-                    LL[row,col] = 0.5 * ( LL[s,col] + LL[d,col] )
+                    LL[row, col] = 0.5 * (LL[s, col] + LL[d, col])
         # use D-inverse to compute A-inverse
         for i in range(l):
             s = pedobj.pedigree[i].sireID-1
             d = pedobj.pedigree[i].damID-1
-            if pedobj.pedigree[i].sireID == pedobj.kw['missing_parent'] and pedobj.pedigree[i].damID == pedobj.kw['missing_parent']:
+            if (pedobj.pedigree[i].sireID == pedobj.kw['missing_parent'] and
+                    pedobj.pedigree[i].damID == pedobj.kw['missing_parent']):
                 # both parents unknown and assumed unrelated
-                a_inv[i,i] = a_inv[i,i] + d_inv[i,i]
+                a_inv[i, i] = a_inv[i, i] + d_inv[i, i]
             elif pedobj.pedigree[i].sireID == pedobj.kw['missing_parent']:
                 # sire unknown, dam known
-                a_inv[i,i] = a_inv[i,i] + d_inv[i,i]
-                a_inv[d,i] = a_inv[d,i] + ( (-0.5) * d_inv[i,i] )
-                a_inv[i,d] = a_inv[i,d] + ( (-0.5) * d_inv[i,i] )
-                a_inv[d,d] = a_inv[d,d] + ( 0.25 * d_inv[i,i] )
+                a_inv[i, i] = a_inv[i, i] + d_inv[i, i]
+                a_inv[d, i] = a_inv[d, i] + ((-0.5) * d_inv[i, i])
+                a_inv[i, d] = a_inv[i, d] + ((-0.5) * d_inv[i, i])
+                a_inv[d, d] = a_inv[d, d] + (0.25 * d_inv[i, i])
             elif pedobj.pedigree[i].damID == pedobj.kw['missing_parent']:
                 # sire known, dam unknown
-                a_inv[i,i] = a_inv[i,i] + d_inv[i,i]
-                a_inv[s,i] = a_inv[s,i] + ( (-0.5) * d_inv[i,i] )
-                a_inv[i,s] = a_inv[i,s] + ( (-0.5) * d_inv[i,i] )
-                a_inv[s,s] = a_inv[s,s] + ( 0.25 * d_inv[i,i] )
-            elif pedobj.pedigree[i].sireID != pedobj.kw['missing_parent'] and pedobj.pedigree[i].damID != pedobj.kw['missing_parent']:
+                a_inv[i, i] = a_inv[i, i] + d_inv[i, i]
+                a_inv[s, i] = a_inv[s, i] + ((-0.5) * d_inv[i, i])
+                a_inv[i, s] = a_inv[i, s] + ((-0.5) * d_inv[i, i])
+                a_inv[s, s] = a_inv[s, s] + (0.25 * d_inv[i, i])
+            elif (pedobj.pedigree[i].sireID != pedobj.kw['missing_parent'] and
+                  pedobj.pedigree[i].damID != pedobj.kw['missing_parent']):
                 # both parents known
-                a_inv[i,i] = a_inv[i,i] + d_inv[i,i]
-                a_inv[s,i] = a_inv[s,i] + ( (-0.5) * d_inv[i,i] )
-                a_inv[i,s] = a_inv[i,s] + ( (-0.5) * d_inv[i,i] )
-                a_inv[d,i] = a_inv[d,i] + ( (-0.5) * d_inv[i,i] )
-                a_inv[i,d] = a_inv[i,d] + ( (-0.5) * d_inv[i,i] )
-                a_inv[s,s] = a_inv[s,s] + ( 0.25 * d_inv[i,i] )
-                a_inv[s,d] = a_inv[s,d] + ( 0.25 * d_inv[i,i] )
-                a_inv[d,s] = a_inv[d,s] + ( 0.25 * d_inv[i,i] )
-                a_inv[d,d] = a_inv[d,d] + ( 0.25 * d_inv[i,i] )
+                a_inv[i, i] = a_inv[i, i] + d_inv[i, i]
+                a_inv[s, i] = a_inv[s, i] + ((-0.5) * d_inv[i, i])
+                a_inv[i, s] = a_inv[i, s] + ((-0.5) * d_inv[i, i])
+                a_inv[d, i] = a_inv[d, i] + ((-0.5) * d_inv[i, i])
+                a_inv[i, d] = a_inv[i, d] + ((-0.5) * d_inv[i, i])
+                a_inv[s, s] = a_inv[s, s] + (0.25 * d_inv[i, i])
+                a_inv[s, d] = a_inv[s, d] + (0.25 * d_inv[i, i])
+                a_inv[d, s] = a_inv[d, s] + (0.25 * d_inv[i, i])
+                a_inv[d, d] = a_inv[d, d] + (0.25 * d_inv[i, i])
     except:
-        a_inv = numpy.zeros([1,1], dtype=numpy.float)
+        a_inv = numpy.zeros([1, 1], dtype=numpy.float32)
 
-    outputfile = '%s%s%s' % (pedobj.kw['filetag'],'_a_inverse_df_a_inv','.dat')
-    aout = open(outputfile,'w')
+    outputfile = '%s%s%s' % (pedobj.kw['filetag'], '_a_inverse_df_a_inv', '.dat')
+    aout = open(outputfile, 'w')
     for row in range(l):
         line = ''
         for col in range(l):
             if col == 0:
-                line = '%7.5f' % a_inv[row,col]
+                line = '%7.5f' % a_inv[row, col]
             else:
-                line = '%s%s%s' % (line, ',', a_inv[row,col])
+                line = '%s%s%s' % (line, ',', a_inv[row, col])
         line = '%s%s' % (line, '\n')
         aout.write(line)
     aout.close()
 
-    outputfile = '%s%s%s' % (pedobj.kw['filetag'],'_a_inverse_df_l','.dat')
-    aout = open(outputfile,'w')
+    outputfile = '%s%s%s' % (pedobj.kw['filetag'], '_a_inverse_df_l', '.dat')
+    aout = open(outputfile, 'w')
     for row in range(l):
         line = ''
         for col in range(l):
             if col == 0:
-                line = '%7.5f' % (LL[row,col])
+                line = '%7.5f' % LL[row, col]
             else:
-                line = '%s%s%s' % (line,',',LL[row,col])
-        line = '%s%s' % (line,'\n')
+                line = '%s%s%s' % (line, ',', LL[row, col])
+        line = '%s%s' % (line, '\n')
         aout.write(line)
     aout.close()
 
-    outputfile = '%s%s%s' % (pedobj.kw['filetag'],'_a_inverse_df_d_inv','.dat')
-    aout = open(outputfile,'w')
+    outputfile = '%s%s%s' % (pedobj.kw['filetag'], '_a_inverse_df_d_inv', '.dat')
+    aout = open(outputfile, 'w')
     for row in range(l):
         line = ''
         for col in range(l):
             if col == 0:
-                line = '%7.5f' % (d_inv[row,col])
+                line = '%7.5f' % d_inv[row, col]
             else:
-                line = '%s%s%s' % (line,',',d_inv[row,col])
-        line = '%s%s' % (line,'\n')
+                line = '%s%s%s' % (line, ',', d_inv[row, col])
+        line = '%s%s' % (line, '\n')
         aout.write(line)
     aout.close()
 
-    try: logging.info('Exited a_inverse_df()')
-    except: pass
+    logging.info('Exited pyp_nrm/a_inverse_df()')
     return a_inv
 
+
 ##
-# partial_inbreeding() computes coefficients of partial inbreeding,
-# which is the probability that an individual, i, is IDB at a locus
-# and that the alleles were derived from ancestor j.
+# partial_inbreeding() computes coefficients of partial inbreeding, which is the probability that an individual, i,
+# is IDB at a locus and that the alleles were derived from ancestor j.
 # @param pedobj A PyPedal pedigree object.
 # @param animals An empty list of renumbered animal IDs to process (do all when list empty).
-# @param gens The number of generations from the pedigree to be used for calculating CoI.  By default, gens=0, which uses the complete pedigree.
+# @param gens The number of generations from the pedigree to be used for calculating CoI.  By default, gens=0, which
+#             uses the complete pedigree.
 # @param rels Flag indicating whether or not summary statistics should be computed for coefficients of relationship.
 # @param cleanmaps Flag to denote whether or not subpedigree ID maps should be deleted after they are used (0|1).
 # @retval A dictionary of partial CoI keyed to renumbered animal IDs.
@@ -1952,10 +2030,12 @@ def partial_inbreeding(pedobj, animals=[], gens=0, rels=1, cleanmaps=1):
     Output: A dictionary of partial CoI keyed to renumbered animal IDs.
     """
 
-    try: logging.info('Entered partial_inbreeding()')
-    except: pass
+    try:
+        logging.info('Entered partial_inbreeding()')
+    except:
+        pass
 
-    from PyPedal import pyp_network
+    from . import pyp_network
     ng = pyp_network.ped_to_graph(pedobj)
 
     _ped = []       # This is a temporary pedigree
@@ -1981,35 +2061,35 @@ def partial_inbreeding(pedobj, animals=[], gens=0, rels=1, cleanmaps=1):
     else:
         _anids = list(pedobj.backmap.keys())     # Distinct animal IDs in the pedigree
 
-    fx = {}         # This will hold our coefficients of inbreeding
-    _parents = {}   # Stores a list of sire-dam pairs along with the youngest offspring
-                    # of that pair.  Used as a lookup table to avoid lots of redundant
-                    # calculations for full-sibs.
-    _anids.sort()       # sort from oldest to youngest
-    _anids.reverse()    # reverse the list to put the youngest animals first
+    fx = {}                 # This will hold our coefficients of inbreeding
+    _parents = {}           # Stores a list of sire-dam pairs along with the youngest offspring of that pair. Used as
+                            # a lookup table to avoid lots of redundant calculations for full-sibs.
+    _anids.sort()           # sort from oldest to youngest
+    _anids.reverse()        # reverse the list to put the youngest animals first
     _counter = 0
     _cum_f_counter = 0
     _vanraden_round = 0
     _cum_pct_proc = 0.
-    _related = {}   # Dictionary for looking-up animals with non-zero
-                    # relationships.
+    _related = {}           # Dictionary for looking-up animals with non-zero relationships.
 
     # If the user wants summary stats on coefficients of relationship,
     # prepare the dictionary, counters, and accumulators.
     if rels:
-        reldict = {}
-        reldict['r_count'], reldict['r_nonzero_count'] = 0, 0
-        reldict['r_sum'], reldict['r_max'] = 0., 0.
-        reldict['r_min'] = 1.
+        reldict = {
+            'r_count': 0,
+            'r_nonzero_count': 0,
+            'r_sum': 0.,
+            'r_max': 0.,
+            'r_min': 1.,
+        }
 
     partial_inbreeding_dict = {}
 
     for i in _anids:
         if int(gens) == 0:
-            _parent_key = '%s_%s' % ( pedobj.pedigree[int(i)-1].sireID,
-                pedobj.pedigree[int(i)-1].damID )
+            _parent_key = '%s_%s' % (pedobj.pedigree[int(i)-1].sireID, pedobj.pedigree[int(i)-1].damID)
         else:
-            _parent_key = '%s_%s' % ( top_r[top_peddict[int(i)]].sireID, top_r[top_peddict[int(i)]].damID )
+            _parent_key = '%s_%s' % (top_r[top_peddict[int(i)]].sireID, top_r[top_peddict[int(i)]].damID)
         try:
             _k = fx[i]  # If an exception is thrown, an animal is not in the
                         # dictionary yet.
@@ -2021,9 +2101,11 @@ def partial_inbreeding(pedobj, animals=[], gens=0, rels=1, cleanmaps=1):
                 _f_counter = 0
                 _vanraden_round = _vanraden_round + 1
                 if _vanraden_round == 1:
-                    try: logging.info('Starting round %s of pyp_nrm/partial_inbreeding().', _vanraden_round)
-                    except: pass
-                _tag = '%s_%s' % (pedobj.kw['filetag'],i)
+                    try:
+                        logging.info('Starting round %s of pyp_nrm/partial_inbreeding().', _vanraden_round)
+                    except:
+                        pass
+                _tag = '%s_%s' % (pedobj.kw['filetag'], i)
 
                 if int(gens) > 0:
                     _ped = top_peddict
@@ -2033,20 +2115,19 @@ def partial_inbreeding(pedobj, animals=[], gens=0, rels=1, cleanmaps=1):
                 if int(gens) > 0:
                     _r = top_r
                 else:
-                    _r = []     # This list will hold a copy of the objects in _ped
-                                # so that we can renumber animal i's pedigree without
-                                # changing the data in pedobj.pedigree.
+                    _r = []             # This list will hold a copy of the objects in _ped
+                                        # so that we can renumber animal i's pedigree without
+                                        # changing the data in pedobj.pedigree.
                     _map = {}
                     for j in _ped:
                         _r.append(copy.copy(pedobj.pedigree[int(j)-1]))
                 _r = pyp_utils.reorder(_r,_tag)      # Reorder the pedigree
-                _s, _map = pyp_utils.renumber(_r,_tag, returnmap=1, \
-                    debug=pedobj.kw['debug_messages'], \
-                    animaltype=pedobj.kw['animal_type'])
-                #print '_map: ', _map
+                _s, _map = pyp_utils.renumber(_r, _tag, returnmap=1, debug=pedobj.kw['debug_messages'],
+                                              animaltype=pedobj.kw['animal_type'])
+                # print( '_map: ', _map)
                 # We need to get a new founder list here so that we can loop over them.
                 _flist = pyp_utils.founders_from_list(_r,pedobj.kw['missing_parent'])
-                #print 'founders: ', _flist
+                # print('founders: ', _flist)
                 # _map maps IDs from original IDs to renumbered IDs.
                 # _backmap allows renumbered ID => original ID reverse lookups.
                 _backmap = {}
@@ -2054,37 +2135,42 @@ def partial_inbreeding(pedobj, animals=[], gens=0, rels=1, cleanmaps=1):
                     _backmap[_mv] = _mk
                 _opts = copy.copy(pedobj.kw)
                 for _f in _flist:
-                    _opts['filetag'] = '%s_%s' % ( _tag, _f )
-                    _f = fast_partial_a_matrix(_s, _f, _flist, _opts,method=pedobj.kw['matrix_type'])
+                    _opts['filetag'] = '%s_%s' % (_tag, _f)
+                    _f = fast_partial_a_matrix(_s, _f, _flist, _opts, method=pedobj.kw['matrix_type'])
                     # _f is a dictionary that contains a dictionary, The
                     # key if the founder (_f) that was passed to
                     # fast_partial_a_matrix and the dictionary keyed to
                     # that founder contains animal -> coefficients of partial
                     # inbreeding between an animal and _f.
-                    for k,v in _f.items():
-                        try: _hask = partial_inbreeding_dict[k]
-                        except KeyError: partial_inbreeding_dict[k] = {}
-                        for k2,v2 in _f[k].items():
+                    for k, v in _f.items():
+                        try:
+                            _hask = partial_inbreeding_dict[k]
+                        except KeyError:
+                            partial_inbreeding_dict[k] = {}
+                        for k2, v2 in _f[k].items():
                             partial_inbreeding_dict[k][k2] = v2
-                if cleanmaps:               # Clean up the subpedigree ID maps that we are
-                    pyp_utils.delete_id_map(_tag)     # not going to use again.
-                _map = {}               # Empty our working dictionary and lists
+                if cleanmaps:                           # Clean up the subpedigree ID maps that we're not going to use
+                    pyp_utils.delete_id_map(_tag)       # again.
+                _map = {}                               # Empty our working dictionary and lists
                 _a = []
                 _s = []
                 _r = []
                 _ped = []
-                logging.info('%s pct (%s) of all animals have been processed in pyp_nrm/partial_inbreeding().', _cum_pct_proc, _cum_f_counter)
+                logging.info('%s pct (%s) of all animals have been processed in pyp_nrm/partial_inbreeding().',
+                             _cum_pct_proc, _cum_f_counter)
             _counter = _counter + 1
 
-        #print 'partial_inbreeding_dict'
-        #print partial_inbreeding_dict
+        # print('partial_inbreeding_dict')
+        # print(partial_inbreeding_dict)
 
-    try:logging.info('Exited partial_inbreeding()')
+    try:
+        logging.info('Exited partial_inbreeding()')
     except: pass
-    #if rels:
-        #return fx
-    #else:
+    # if rels:
+    #     return fx
+    # else:
     return partial_inbreeding_dict
+
 
 ##
 # fast_partial_a_matrix() calculates a partial kinship matrix for a given
@@ -2110,23 +2196,23 @@ def fast_partial_a_matrix(pedigree, founder, founderlist, pedopts, method='dense
     _sires = {}
     _dams = {}
     l = len(pedigree)
-    if method not in ['dense','sparse']:
+    if method not in ['dense', 'sparse']:
         method = 'dense'
     # Use PySparse to provide sparse matrix storage for large
     # relationship matrices.
     if method == 'sparse':
         try:
-            from pysparse import spmatrix
-            a = spmatrix.ll_mat_sym(l*l)
-            a = 0.0
+            from scipy.sparse import coo_array
+            a = coo_array((l, l), dtype=numpy.float32).toarray()
         except ImportError:
-            logging.error('Could not import spmatrix from PySparse; using Numpy instead!')
-            a = numpy.zeros([l,l],'d')  # initialize a matrix of zeros
+            logging.error('Could not import scipy.sparse; using Numpy instead!')
+            a = numpy.zeros([l, l], dtype=numpy.float32)  # initialize a matrix of zeros
     # Otherwise, use Numpy and its dense matrices
     else:
-        a = numpy.zeros([l,l],'d')  # initialize a matrix of zeros
+        a = numpy.zeros([l, l], dtype=numpy.float16)  # initialize a matrix of zeros
     if pedopts['debug_messages'] and pedopts['messages'] != 'quiet':
-        print('\t\t[pyp_nrm/fast_partial_a_matrix()] Started forming animal, sire, and dam lists at %s' %  pyp_utils.pyp_nice_time())
+        print('\t\t[pyp_nrm/fast_partial_a_matrix()] Started forming animal, sire, and dam lists at %s' %
+              pyp_utils.pyp_nice_time())
     for i in range(l):
         try:
             _a = _animals[i]
@@ -2141,8 +2227,9 @@ def fast_partial_a_matrix(pedigree, founder, founderlist, pedopts, method='dense
         except KeyError:
             _dams[i] = int(pedigree[i].damID)
     if pedopts['debug_messages'] and pedopts['messages'] != 'quiet':
-        print('\t\t[pyp_nrm/fast_partial_a_matrix()] Finished forming animal, sire, and dam lists at %s' %  pyp_utils.pyp_nice_time())
-        print('\t\t[pyp_nrm/fast_partial_a_matrix()] Started computing A at %s' %  pyp_utils.pyp_nice_time())
+        print('\t\t[pyp_nrm/fast_partial_a_matrix()] Finished forming animal, sire, and dam lists at %s' %
+              pyp_utils.pyp_nice_time())
+        print('\t\t[pyp_nrm/fast_partial_a_matrix()] Started computing A at %s' % pyp_utils.pyp_nice_time())
 
     partial_f = {}
     if debug:
@@ -2151,73 +2238,76 @@ def fast_partial_a_matrix(pedigree, founder, founderlist, pedopts, method='dense
     # Step 1: Set the len(founderlist)-square block of a to 0. and the element
     #         a[founder,founder] to 0.5. The first part is already done.
     fidx = founderlist.index(founder)
-    a[fidx,fidx] = 0.5
+    a[fidx, fidx] = 0.5
 
     # Step 2:   Intermediate ancestors (non-founders):
     #           2a: Founder row
     row = fidx
-    #print 'fidx      : ', fidx
-    for col in range(len(founderlist),l):
-        #print row, col
+    # print('fidx      : ', fidx)
+    for col in range(len(founderlist), l):
+        # print(row, col)
         if str(_sires[col]) == str(pedopts['missing_parent']) and str(_dams[col] == pedopts['missing_parent']):
             pass
         elif str(_sires[col]) == str(pedopts['missing_parent']):
             if row != col:
-                a[row,col] = 0.5 * a[row,_dams[col]-1]
-                a[col,row] = a[row,col]
+                a[row, col] = 0.5 * a[row, _dams[col]-1]
+                a[col, row] = a[row, col]
         elif str(_dams[col]) == str(pedopts['missing_parent']):
             if row != col:
-                a[row,col] = 0.5 * a[row,_sires[col]-1]
-                a[col,row] = a[row,col]
+                a[row, col] = 0.5 * a[row, _sires[col]-1]
+                a[col, row] = a[row, col]
         elif str(_sires[col]) != str(pedopts['missing_parent']) and str(_dams[col]) != str(pedopts['missing_parent']):
             # both parents known
-            #print _sires[col]
-            #print _dams[col]
+            # print(_sires[col])
+            # print(_dams[col])
             if row == col:
-                a[row,row] = a[row,fidx] + ( 0.5 * a[_sires[col]-1,_dams[col]-1] )
+                a[row, row] = a[row, fidx] + (0.5 * a[_sires[col]-1, _dams[col]-1])
             else:
-                a[row,col] = 0.5 * ( a[row,_sires[col]-1] + a[row,_dams[col]-1] )
-                a[col,row] = a[row,col]
+                a[row, col] = 0.5 * (a[row, _sires[col]-1] + a[row, _dams[col]-1])
+                a[col, row] = a[row, col]
         else:
-            print('[ERROR]: There is a problem with the sire (ID %s) and/or dam (ID %s) of animal %s' % (pedigree[col].sireID, pedigree[col].damID, pedigree[col].animalID))
+            print('[ERROR]: There is a problem with the sire (ID %s) and/or dam (ID %s) of animal %s' %
+                  (pedigree[col].sireID, pedigree[col].damID, pedigree[col].animalID))
             break
     #           2a: Non-founder rows
-    for row in range(len(founderlist),l):
-        for col in range(row,l):
+    for row in range(len(founderlist), l):
+        for col in range(row, l):
             if str(_sires[col]) == str(pedopts['missing_parent']) and str(_dams[col]) == str(pedopts['missing_parent']):
                 pass
             elif str(_sires[col]) == str(pedopts['missing_parent']):
                 if row != col:
-                    a[row,col] = 0.5 * a[row,_dams[col]-1]
-                    a[col,row] = a[row,col]
+                    a[row, col] = 0.5 * a[row, _dams[col]-1]
+                    a[col, row] = a[row, col]
             elif str(_dams[col]) == str(pedopts['missing_parent']):
                 if row != col:
                     a[row,col] = 0.5 * a[row,_sires[col]-1]
                     a[col,row] = a[row,col]
-            elif str(_sires[col]) != str(pedopts['missing_parent']) and str(_dams[col]) != str(pedopts['missing_parent']):
+            elif (str(_sires[col]) != str(pedopts['missing_parent']) and
+                  str(_dams[col]) != str(pedopts['missing_parent'])):
                 # both parents known
                 if row == col:
-                    a[row,row] = a[row,fidx] + ( 0.5 * a[_sires[col]-1,_dams[col]-1] )
+                    a[row, row] = a[row, fidx] + (0.5 * a[_sires[col]-1, _dams[col]-1])
                 else:
-                    a[row,col] = 0.5 * ( a[row,_sires[col]-1] + a[row,_dams[col]-1] )
-                    a[col,row] = a[row,col]
+                    a[row, col] = 0.5 * (a[row, _sires[col]-1] + a[row, _dams[col]-1])
+                    a[col, row] = a[row, col]
             else:
-                print('[ERROR]: There is a problem with the sire (ID %s) and/or dam (ID %s) of animal %s' % (pedigree[col].sireID, pedigree[col].damID, pedigree[col].animalID))
+                print('[ERROR]: There is a problem with the sire (ID %s) and/or dam (ID %s) of animal %s' %
+                      (pedigree[col].sireID, pedigree[col].damID, pedigree[col].animalID))
                 break
 
     # Step 3:   Partial inbreeding coefficients
-    #print '-'*80
+    # print('-'*80)
     partial_f[founder] = {}
-    for i in range(len(founderlist),l):
-        partial_f[founder][_animals[i]] = a[_sires[i]-1,_dams[i]-1]
-        #print _animals[i], _sires[i], _dams[i]
+    for i in range(len(founderlist), l):
+        partial_f[founder][_animals[i]] = a[_sires[i]-1, _dams[i]-1]
+        # print(_animals[i], _sires[i], _dams[i])
 
     if debug:
-        numpy.set_printoptions(precision=4,linewidth=100)
+        numpy.set_printoptions(precision=4, linewidth=100)
         print(a)
         print(partial_f)
 
     if pedopts['debug_messages'] and pedopts['messages'] != 'quiet':
-        print('\t\t[pyp_nrm/fast_partial_a_matrix()] Finished computing A at %s' %  pyp_utils.pyp_nice_time())
+        print('\t\t[pyp_nrm/fast_partial_a_matrix()] Finished computing A at %s' % pyp_utils.pyp_nice_time())
 
     return partial_f

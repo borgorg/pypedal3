@@ -12,6 +12,23 @@ PyPedal 2 CHANGELOG
 
 CHANGES in PyPedal 3.0.0 (Ridcully)
 ===================================
+??? 08/22/2024  My lord, the indentation in pyp_nrm/inbreeding_modified_meuwissen_luo() was a complete and utter
+    disaster. Mixed spaces and tabs everywhere. Needs careful testing to make sure I didn't break anything while
+    fixing that mess.
+??? 08/22/2024  pyp_nrm/partial_inbreeding() needs testing...something doesn't look quite right.
+*** 08/22/2024  I went through all the functions in pyp_graphics and cleaned things up to improve readability. The
+    linter is much happier now. All the print() statements are now converted from Python 2. Debug arguments were added
+    to many functions. Some documentation errors were fixed. Functions now return True/False instead of 1/0.
+''' 08/22/2024  pyp_graphics/spy_matrix_pylab() now calls pylab.spy() instead of pylab.spy2(), which appears to have
+    been deprecated.
++++ 08/22/2024  pyp_graphics/draw_pedigree() and pyp_graphics/new_draw_pedigree() now implement the new 'auto_renumber'
+    pedigree option.
++++ 08/22/2024  Added a new keyword, 'auto_renumber', which tells PyPedal that it can automatically renumber a
+    pedigree if a function requires a renumbered pedigree as input and the pedigree hasn't been renumbered. This is
+    subtly different from the 'renumber' keyword, which renumbers the pedigree at load time. 'auto_renumber' only
+    triggers renumbering when a pedigree operation requires it. The default value is False.
+''' 08/22/2023  Updated imports in pyp_graphics/rmuller_pcolor_matrix_pil() to work with Pillow.
+''' 08/22/2023  Updated imports in pyp_graphics/rmuller_spy_matrix_pil() to work with Pillow.
 *** 08/21/2024  All the functions in pyp_network now accept a 'debug' argument (boolean).
 *** 08/21/2024  All the functions in pyp_network now return False on falure, rather than 0, -999, or other values.
 *** 08/21/2024  I went through all the functions in network and cleaned things up to improve readability.
@@ -43,7 +60,7 @@ XXX 08/21/2024  Removed assign_sexes(), assign_offspring(), and assign_upg() fro
     fixed now.
 ??? 08/20/2024  pyp_io/renderTitle() and pyp_io/renderBodyText() make references to globals that aren't set outside
     of the functions, I need to figure out what to do here. I don't remember at the moment why I did that.
-*** 08/20/2024  I went through all of the functions in pyp_io and cleaned things up to improve readability. The linter
+*** 08/20/2024  I went through all of the functions in pyp_io and cleaned things up to improve readability. The linte
     is much happier now. Some bugs were fixed here and there. Maybe Python 2.x still used file() instead of open() and
     I never cleaned that up? Maybe I shouldn't have torn out the unit testing framework and should be writing tests
     instead.

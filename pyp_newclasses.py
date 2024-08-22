@@ -3,8 +3,8 @@
 ###############################################################################
 # NAME: pyp_newclasses.py
 # VERSION: 3.0.0 (16MARCH2024)
-# AUTHOR: John B. Cole (john.cole@uscdcb.com)
-# LICENSE: LGPL
+# AUTHOR: John B. Cole (john.b.cole@gmail.com)
+# LICENSE: LGPL v2.1 (see LICENSE file)
 ###############################################################################
 
 ## @package pyp_newclasses
@@ -97,6 +97,7 @@ class NewPedigree:
                 kw['simulate_pmd'] = 100
             if 'simulate_save' not in list(kw.keys()):
                 kw['simulate_save'] = 0
+            # This seed isn't anything mysterious, it's my office telephone number from when I worked at USDA.
             if 'simulate_seed' not in list(kw.keys()):
                 kw['simulate_seed'] = 5048665
         else:
@@ -116,6 +117,10 @@ class NewPedigree:
             kw['renumber'] = 1
         if 'reorder' not in list(kw.keys()):
             kw['reorder'] = 0
+        # When True, auto_renumber tells PyPedal to automatically renumber a pedigree when a function requires a
+        # renumbered pedigree but the pedigree provided is not renumbered.
+        if 'auto_renumber' not in list(kw.keys()):
+            kw['auto_renumber'] = False
         if 'reorder_max_rounds' not in list(kw.keys()):
             kw['reorder_max_rounds'] = 100
         if 'pedigree_is_renumbered' not in list(kw.keys()):

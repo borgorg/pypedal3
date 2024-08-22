@@ -3,9 +3,9 @@
 
 ###############################################################################
 # NAME: pyp_graphics.py
-# VERSION: 2.0.0 (29SEPTEMBER2010)
-# AUTHOR: John B. Cole, PhD (john.cole@ars.usda.gov)
-# LICENSE: LGPL
+# VERSION: 3.0.0 (22AUGUST2024)
+# AUTHOR: John B. Cole (john.b.cole@gmail.com)
+# LICENSE: LGPL v2.1 (see LICENSE file)
 ###############################################################################
 # FUNCTIONS:
 #   rmuller_spy_matrix_pil() [1]
@@ -22,8 +22,8 @@
 # [1] These routines were taken from the ASPN Python Cookbook
 #     (http://aspn.activestate.com/ASPN/Cookbook/Python/) and are used under
 #     terms of the license, "Python Cookbook code is freely available for use
-#     and review" as I understand it.  I did not write them; Rick Muller
-#     properly deserves credit for that.  I THINK Rick's homepage's is:
+#     and review" as I understand it. I did not write them; Rick Muller
+#     properly deserves credit for that. I THINK Rick's homepage's is:
 #     http://www.cs.sandia.gov/~rmuller/.
 # Python Cookbook notes:
 #     Title: Matlab-like 'spy' and 'pcolor' functions
@@ -54,6 +54,12 @@
 # means that you do not have to install GTK/PyGTK or WxWidgets/PyWxWidgets just to use
 # PyPedal. Please consult the sites above for licensing and installation information.
 
+
+import logging
+import math
+from . import pyp_demog
+
+
 ##
 # rmuller_spy_matrix_pil() implements a matlab-like 'spy' function to display the
 # sparsity of a matrix using the Python Imaging Library.
@@ -63,21 +69,22 @@
 # @param do_outline Whether or not to print an outline around the block (default 0)
 # @param height The height of the image (default 300)
 # @param width The width of the image (default 300)
-# @retval None
-def rmuller_spy_matrix_pil(A,fname='tmp.png',cutoff=0.1,do_outline=0, height=300, width=300):
+# @retval True for success and False for failure.
+def rmuller_spy_matrix_pil(A, fname='tmp.png', cutoff=0.1, do_outline=0, height=300, width=300):
     """
     rmuller_spy_matrix_pil() implements a matlab-like 'spy' function to display the
     sparsity of a matrix using the Python Imaging Library.
     """
     try:
-        import Image, ImageDraw
+        from PIL import Image
+        from PIL import ImageDraw
     except:
-        return 0
-    img = Image.new("RGB",(width,height),(255,255,255))
+        return False
+    img = Image.new("RGB", (width, height),(255, 255, 255))
     draw = ImageDraw.Draw(img)
     n,m = A.shape
     if n > width or m > height:
-        raise "Rectangle too big %d %d %d %d" % (n,m,width,height)
+        raise "Rectangle too big %d %d %d %d" % (n, m, width, height)
     for i in range(n):
         xmin = width*i/float(n)
         xmax = width*(i+1)/float(n)
@@ -86,31 +93,29 @@ def rmuller_spy_matrix_pil(A,fname='tmp.png',cutoff=0.1,do_outline=0, height=300
         # around the diagonal.
         if n == m:
             for j in range(i,n-1):
-#                 print 'i: %s, j: %s' % ( i, j )
+                # print('i: %s, j: %s' % ( i, j ))
                 ymin = height*j/float(m)
                 ymax = height*(j+1)/float(m)
                 if abs(A[i,j]) > cutoff:
                     if do_outline:
-                        draw.rectangle((xmin,ymin,xmax,ymax),fill=(0,0,255),
-                            outline=(0,0,0))
-                        draw.rectangle((ymin,xmin,ymax,xmax),fill=(0,0,255),
-                            outline=(0,0,0))
+                        draw.rectangle((xmin, ymin, xmax, ymax), fill=(0, 0, 255), outline=(0, 0, 0))
+                        draw.rectangle((ymin, xmin, ymax, xmax), fill=(0, 0, 255), outline=(0, 0, 0))
                     else:
-                        draw.rectangle((xmin,ymin,xmax,ymax),fill=(0,0,255))
-                        draw.rectangle((ymin,xmin,ymax,xmax),fill=(0,0,255))
-        # If the matrix is not square, we can't shave a bit
+                        draw.rectangle((xmin, ymin, xmax, ymax), fill=(0, 0, 255))
+                        draw.rectangle((ymin, xmin, ymax, xmax), fill=(0, 0, 255))
+        # If the matrix is not square, we can't save any time that way.
         else:
             for j in range(m):
                 ymin = height*j/float(m)
                 ymax = height*(j+1)/float(m)
                 if abs(A[i,j]) > cutoff:
                     if do_outline:
-                        draw.rectangle((xmin,ymin,xmax,ymax),fill=(0,0,255),
-                            outline=(0,0,0))
+                        draw.rectangle((xmin, ymin, xmax, ymax),fill=(0, 0, 255), outline=(0, 0, 0))
                     else:
-                        draw.rectangle((xmin,ymin,xmax,ymax),fill=(0,0,255))
+                        draw.rectangle((xmin, ymin, xmax, ymax), fill=(0, 0, 255))
     img.save(fname)
-    return
+    return True
+
 
 ##
 # rmuller_pcolor_matrix_pil() implements a matlab-like 'pcolor' function to
@@ -121,7 +126,7 @@ def rmuller_spy_matrix_pil(A,fname='tmp.png',cutoff=0.1,do_outline=0, height=300
 # @param do_outline Whether or not to print an outline around the block (default 0)
 # @param height The height of the image (default 300)
 # @param width The width of the image (default 300)
-# @retval A list of Animal() objects; a pedigree metadata object.
+# @retval True for success and False for failure.
 def rmuller_pcolor_matrix_pil(A, fname='tmp.png', do_outline=0, height=300, width=300):
     """
     rmuller_pcolor_matrix_pil() implements a matlab-like 'pcolor' function to
@@ -129,87 +134,79 @@ def rmuller_pcolor_matrix_pil(A, fname='tmp.png', do_outline=0, height=300, widt
     Library.
     """
     try:
-        import Image, ImageDraw
+        from PIL import Image
+        from PIL import ImageDraw
     except:
-        return 0
+        return False
     key_dict = {}
     color_cache = {}
 
-    img = Image.new("RGB",(width,height),(255,255,255))
+    img = Image.new("RGB", (width, height), (255, 255, 255))
     draw = ImageDraw.Draw(img)
 
-    # For Numeric
-    #mina = min(min(A))
-    #maxa = max(max(A))
-
-    # For NumPy
     mina = A.min()
     maxa = A.max()
+    n, m = A.shape
 
-    n,m = A.shape
     if n > width or m > height:
-        raise "Rectangle too big %d %d %d %d" % (n,m,width,height)
+        raise "Rectangle too big %d %d %d %d" % (n, m, width, height)
     for i in range(n):
         xmin = width*i/float(n)
         xmax = width*(i+1)/float(n)
         for j in range(m):
             ymin = height*j/float(m)
             ymax = height*(j+1)/float(m)
-            # JBC added a dictionary to cache colors to reduce the number of calls
-            # to rmuller_get_color().  This may lead to a dramatic improvement in the
-            # performance of rmuller_pcolor_matrix_pil(), which currently makes a call
-            # to rmuller_get_color() for each of the n**2 elements of A.  The cache will
-            # reduce that to the number of unique values in A, which should be much
-            # smaller.
-            _cache_key = '%s_%s_%s' % (A[i,j],mina,maxa)
+            # JBC added a dictionary to cache colors to reduce the number of callsto rmuller_get_color(). This may
+            # improve the performance of rmuller_pcolor_matrix_pil(), which currently makes a call to
+            # rmuller_get_color() for each of the n**2 elements of A. The cache will reduce that to the number of
+            # unique values in A, which should be much smaller.
+            _cache_key = '%s_%s_%s' % (A[i, j], mina, maxa)
             try:
                 color = color_cache[_cache_key]
             except KeyError:
-                color = rmuller_get_color(A[i,j],mina,maxa)
+                color = rmuller_get_color(A[i, j], mina, maxa)
                 color_cache[_cache_key] = color
             # JBC added this to generate a color key.
             try:
                 _v = key_dict[color]
             except KeyError:
-                #_key = round( (A[i,j] * 1000), 0 )
-                key_dict[A[i,j]] = color
+                # _key = round( (A[i,j] * 1000), 0 )
+                key_dict[A[i, j]] = color
             if do_outline:
-                draw.rectangle((xmin,ymin,xmax,ymax),fill=color,outline=(0,0,0))
+                draw.rectangle((xmin, ymin, xmax, ymax), fill=color, outline=(0, 0, 0))
             else:
-                draw.rectangle((xmin,ymin,xmax,ymax),fill=color)
+                draw.rectangle((xmin, ymin, xmax, ymax), fill=color)
 
-    #print key_dict
+    # print(key_dict)
     img.save(fname)
-    return
+    return True
+
 
 ##
-# rmuller_get_color() Converts a float value to one of a continuous range of colors
-# using recipe 9.10 from the Python Cookbook.
+# rmuller_get_color() Convert a float to a continuous color value using recipe 9.10 from the Python Cookbook.
 # @param a Float value to convert to a color.
 # @param cmin Minimum value in array.
 # @param cmax Maximum value in array.
 # @retval An integer containins an RGB triplet.
 def rmuller_get_color(a, cmin, cmax):
     """
-    Convert a float value to one of a continuous range of colors.
-    Rewritten to use recipe 9.10 from the O'Reilly Python Cookbook.
+    Convert a float to a continuous color value using recipe 9.10 from the Python Cookbook.
     """
     try:
         a = float(a-cmin)/(cmax-cmin)
     except ZeroDivisionError:
         a = 0.5 # cmax == cmin
-    blue = min((max((4*(0.75-a),0.)),1.))
-    red = min((max((4*(a-0.25),0.)),1.))
-    green = min((max((4*math.fabs(a-0.5)-1.,0)),1.))
-    return '#%1x%1x%1x' % (int(15*red),int(15*green),int(15*blue))
+    blue = min((max((4*(0.75-a), 0.)), 1.))
+    red = min((max((4*(a-0.25), 0.)), 1.))
+    green = min((max((4*math.fabs(a-0.5)-1., 0)), 1.))
+    return '#%1x%1x%1x' % (int(15*red), int(15*green), int(15*blue))
+
 
 ##
-# draw_pedigree() uses the pydot bindings to the graphviz library -- if they
-# are available on your system -- to produce a directed graph of your pedigree
-# with paths of inheritance as edges and animals as nodes.  If there is more than
-# one generation in the pedigree as determind by the "gen" attributes of the animals
-# in the pedigree, draw_pedigree() will use subgraphs to try and group animals in the
-# same generation together in the drawing.
+# draw_pedigree() uses the pydot bindings to the graphviz library -- if they're available on your system -- to
+# produce a directed graph of your pedigree with paths of inheritance as edges and animals as nodes. If there's
+# more than one generation in the pedigree as determind by the "gen" attributes of the animals in the pedigree,
+# draw_pedigree() will use subgraphs to try and group animals in the same generation together in the drawing.
 # @param pedobj A PyPedal pedigree object.
 # @param gfilename The name of the file to which the pedigree should be drawn
 # @param gtitle The title of the graph.
@@ -224,39 +221,54 @@ def rmuller_get_color(a, cmin, cmax):
 # @param gtitloc Indicates if the title be drawn or above ('t') or below ('b') the graph.
 # @param gtitjust Indicates if the title should be center- ('c'), left- ('l'), or right-justified ('r').
 # @param gshowall Draws animals with no links to other ancestors in the pedigree (1) or suppresses them (0).
-# @param gclusters Indicates if subgraph clusters should be used when drawing the pedigree, which may improve layout in some pedigrees.
+# @param gclusters Indicates if subgraph clusters should be used when drawing the pedigree, which may improve layout
+#                  in some pedigrees.
 # @param gwidth Width of the canvas to plot on, in inches
 # @param gheight Height of the canvas to plot on, in inches
 # @param gdpi Resolution of image in DPI
-# @retval A 1 for success and a 0 for failure.
-def draw_pedigree(pedobj, gfilename='pedigree', gtitle='', gformat='jpg', gsize='f', gdot='1', gorient='p', gdirec='', gname=0, gfontsize=10, garrow=1, gtitloc='b', gtitjust='c', gshowall=1, gclusters=0, gwidth=8.5, gheight=11, gdpi=150):
+# @retval True for success and False for failure.
+def draw_pedigree(pedobj, gfilename='pedigree', gtitle='', gformat='jpg', gsize='f', gdot='1', gorient='p',
+                  gdirec='', gname=0, gfontsize=10, garrow=1, gtitloc='b', gtitjust='c', gshowall=1, gclusters=0,
+                  gwidth=8.5, gheight=11, gdpi=150):
     """
-    draw_pedigree() uses the pydot bindings to the graphviz library -- if they
-    are available on your system -- to produce a directed graph of your pedigree
-    with paths of inheritance as edges and animals as nodes.  If there is more than
-    one generation in the pedigree as determind by the "gen" attributes of the animals
-    in the pedigree, draw_pedigree() will use subgraphs to try and group animals in the
-    same generation together in the drawing.
+    draw_pedigree() uses the pydot bindings to the graphviz library -- if they're available on your system -- to
+    produce a directed graph of your pedigree with paths of inheritance as edges and animals as nodes. If there's
+    more than one generation in the pedigree as determind by the "gen" attributes of the animals in the pedigree,
+    draw_pedigree() will use subgraphs to try and group animals in the same generation together in the drawing.
     """
     if gtitle == '':
         gtitle = pedobj.kw['pedname']
     from .pyp_utils import string_to_table_name
     _gtitle = string_to_table_name(gtitle)
-#     if pedobj.kw['messages'] == 'verbose':
-#         print 'gtitle: %s' % ( gtitle )
-#         print '_gtitle: %s' % ( _gtitle )
+    # if pedobj.kw['messages'] == 'verbose':
+    #     print( 'gtitle: %s' % ( gtitle ))
+    #     print('_gtitle: %s' % ( _gtitle ))
 
-    if gtitloc not in ['t','b']:
+    if gtitloc not in ['t', 'b']:
         gtitloc = 'b'
-    if gtitjust not in ['c','l','r']:
+    if gtitjust not in ['c', 'l', 'r']:
         gtitjust = 'c'
 
-    #print pedobj.metadata.unique_gen_list
+    # print('Generations in pedigree:')
+    # print(pedobj.metadata.unique_gen_list)
 
     if not pedobj.kw['pedigree_is_renumbered']:
-        if pedobj.kw['messages'] != 'quiet':
-            print('[GRAPH]: The pedigree that you passed to pyp_graphics/draw_pedigree() is not renumbered. Because of this, there may be errors in the rendered pedigree. In order to insure that the pedigree drawing is accurate, you should renumber the pedigree before calling draw_pedigree().')
-        logging.error('The pedigree that you passed to pyp_graphics/draw_pedigree() is not renumbered. Because of this, there may be errors in the rendered pedigree. In order to insure that the pedigree drawing is accurate, you should renumber the pedigree before calling draw_pedigree().')
+        if pedobj.kw['auto_renumber']:
+            pedobj.renumber()
+            print('[INFO]: pyp_graphics/draw_pedigree() requires a renumbered pedigree. The pedigree you provided '
+                  'isn\'t renumbered but you enabled automatic renumbering. PyPedal will renumber the pedigree '
+                  'before continuing. This may take a few minutes if your pedigree is large.')
+            logging.info('pyp_graphics/draw_pedigree() requires a renumbered pedigree. The pedigree you provided '
+                         'isn\'t renumbered but you enabled automatic renumbering. PyPedal will renumber the '
+                         'pedigree before continuing. This may take a few minutes if your pedigree is large.')
+        else:
+            if pedobj.kw['messages'] != 'quiet':
+                print('[WARNING]: The pedigree you passed to pyp_graphics/draw_pedigree() is not renumbered. Because '
+                      'of this, there may be errors in the rendered pedigree. In order to insure that the pedigree '
+                      'drawing is accurate, you should renumber the pedigree before calling draw_pedigree().')
+            logging.warning('The pedigree you passed to pyp_graphics/draw_pedigree() is not renumbered. Because of '
+                            'this, there may be errors in the rendered pedigree. In order to insure that the pedigree '
+                            'drawing is accurate, you should renumber the pedigree before calling draw_pedigree().')
 
     #try:
     import pydot
@@ -265,44 +277,62 @@ def draw_pedigree(pedobj, gfilename='pedigree', gtitle='', gformat='jpg', gsize=
     # processing breaks.  In such cases, don't add a label.
     if gtitle == '':
         if gshowall:
-            g = pydot.Dot(graph_name=str(_gtitle), graph_type='digraph', strict=False, suppress_disconnected=False, simplify=True)
+            g = pydot.Dot(graph_name=str(_gtitle), graph_type='digraph', strict=False,
+                          suppress_disconnected=False, simplify=True)
         else:
-            g = pydot.Dot(graph_name=str(_gtitle), graph_type='digraph', strict=False, suppress_disconnected=True, simplify=True)
+            g = pydot.Dot(graph_name=str(_gtitle), graph_type='digraph', strict=False,
+                          suppress_disconnected=True, simplify=True)
     else:
         if gshowall:
-            g = pydot.Dot(label=str(_gtitle), labelloc=str(gtitloc), labeljust=str(gtitjust), graph_name=str(_gtitle), graph_type='digraph', strict=False, suppress_disconnected=False, simplify=True)
+            g = pydot.Dot(label=str(_gtitle), labelloc=str(gtitloc), labeljust=str(gtitjust),
+                          graph_name=str(_gtitle), graph_type='digraph', strict=False,
+                          suppress_disconnected=False, simplify=True)
         else:
-            g = pydot.Dot(label=str(_gtitle), labelloc=str(gtitloc), labeljust=str(gtitjust), graph_name=str(_gtitle), graph_type='digraph', strict=False, suppress_disconnected=True, simplify=True)
+            g = pydot.Dot(label=str(_gtitle), labelloc=str(gtitloc), labeljust=str(gtitjust),
+                          graph_name=str(_gtitle), graph_type='digraph', strict=False,
+                          suppress_disconnected=True, simplify=True)
     # Make sure that gfontsize has a valid value.
     try:
         gfontsize = int(gfontsize)
-    except:
+    except ValueError:
         gfontsize = 10
     if gfontsize < 10:
         gfontsize = 10
     gfontsize = str(gfontsize)
-#     print 'gfontsize = %s' % (gfontsize)
-    # Check the resolution and set if it's a positive integer, otherwise set it to the default.
-    dpi = int(gdpi)
-    if dpi <= 0: dpi = 150
+    # print('gfontsize = %s' % (gfontsize))
+    # Check the resolution and see if it's a positive integer, otherwise set it to the default.
+    try:
+        dpi = int(gdpi)
+    except ValueError:
+        dpi = 150
+    if dpi <= 0:
+        dpi = 150
     g.set_dpi(dpi)
     # If the user specifies a height and width for the canvas use it if it's a plausible
     # value. Anything smaller than 8.5 x 11 is set to that size. Values larger than 8.5 x 11
     # are left alone.
     if gheight and gwidth:
-        gheight = float(gheight)
-	gwidth = float(gwidth)
-        if gwidth <= 8.5: gwidth = 8.5
-        if gheight <= 11.: gwidth = 11.
         try:
-            page = "%.1f,%.1f" % ( gwidth, gheight )
-            size = "%.1f,%.1f" % ( gwidth-1, gheight-1 )
+            gheight = float(gheight)
+        except ValueError:
+            gheight = 11.
+        try:
+            gwidth = float(gwidth)
+        except ValueError:
+            gheight = float(gheight)
+        if gwidth <= 8.5:
+            gwidth = 8.5
+        if gheight <= 11.:
+            gwidth = 11.
+        try:
+            page = "%.1f, %.1f" % (gwidth, gheight)
+            size = "%.1f, %.1f" % (gwidth-1, gheight-1)
         except:
-            page = "8.5,11"
-            size = "7.5,10"
+            page = "8.5, 11"
+            size = "7.5, 10"
     else:
-        page = "8.5,11"
-        size = "7.5,10"
+        page = "8.5, 11"
+        size = "7.5, 10"
     g.set_page(page)
     g.set_size(size)
     # Handle the orientation of the document.
@@ -345,34 +375,44 @@ def draw_pedigree(pedobj, gfilename='pedigree', gtitle='', gformat='jpg', gsize=
                 if str(_m.sireID) != str(pedobj.kw['missing_parent']):
                     if gname:
                         if garrow:
-                            g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].name), str(_m.name)))
+                            g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].name),
+                                                  str(_m.name)))
                         else:
-                            g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].name), str(_m.name), dir='none'))
+                            g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].name),
+                                                  str(_m.name), dir='none'))
                     else:
                         if garrow:
-                            g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].originalID), str(_m.originalID)))
+                            g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].originalID),
+                                                  str(_m.originalID)))
                         else:
-                            g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].originalID), str(_m.originalID), dir='none'))
+                            g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].originalID),
+                                                  str(_m.originalID), dir='none'))
                 if str(_m.damID) != str(pedobj.kw['missing_parent']):
                     if gname:
                         if garrow:
-                            g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].name), str(_m.name)))
+                            g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].name),
+                                                  str(_m.name)))
                         else:
-                            g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].name), str(_m.name), dir='none'))
+                            g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].name),
+                                                  str(_m.name), dir='none'))
                     else:
                         if garrow:
-                            g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].originalID), str(_m.originalID)))
+                            g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].originalID),
+                                                  str(_m.originalID)))
                         else:
-                            g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].originalID), str(_m.originalID), dir='none'))
+                            g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].originalID),
+                                                  str(_m.originalID), dir='none'))
     # Or test the new subgraph clusters
     elif gclusters:
         for _g in pedobj.metadata.unique_gen_list:
             _sg_anims = []
             _sg_name = 'sg%s' % (_g)
             if gshowall:
-                sg = pydot.Cluster(graph_name=str(_sg_name), suppress_disconnected=False, simplify=True)
+                sg = pydot.Cluster(graph_name=str(_sg_name), suppress_disconnected=False,
+                                   simplify=True)
             else:
-                sg = pydot.Cluster(graph_name=str(_sg_name), suppress_disconnected=True, simplify=True)
+                sg = pydot.Cluster(graph_name=str(_sg_name), suppress_disconnected=True,
+                                   simplify=True)
             for _m in pedobj.pedigree:
                 if int(_m.gen) == int(_g):
                     _sg_anims.append(_m.animalID)
@@ -398,39 +438,48 @@ def draw_pedigree(pedobj, gfilename='pedigree', gtitle='', gformat='jpg', gsize=
             if str(_m.sireID) != str(pedobj.kw['missing_parent']):
                 if gname:
                     if garrow:
-                        g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].name), str(_m.name)))
+                        g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].name),
+                                              str(_m.name)))
                     else:
-                        g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].name), str(_m.name), dir='none'))
+                        g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].name),
+                                              str(_m.name), dir='none'))
                 else:
                     if garrow:
-                        g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].animalID), str(_m.animalID)))
+                        g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].animalID),
+                                              str(_m.animalID)))
                     else:
-                        g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].animalID), str(_m.animalID), dir='none'))
+                        g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].animalID),
+                                              str(_m.animalID), dir='none'))
             if str(_m.damID) != str(pedobj.kw['missing_parent']):
                 if gname:
                     if garrow:
-                        g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].name), str(_m.name)))
+                        g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].name),
+                                              str(_m.name)))
                     else:
-                        g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].name), str(_m.name), dir='none'))
+                        g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].name),
+                                              str(_m.name), dir='none'))
                 else:
                     if garrow:
-                        g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].animalID), str(_m.animalID)))
+                        g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].animalID),
+                                              str(_m.animalID)))
                     else:
-                        g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].animalID), str(_m.animalID), dir='none'))
+                        g.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].animalID),
+                                              str(_m.animalID), dir='none'))
     # Otherwise we can draw a nice graph.
     else:
         for _g in pedobj.metadata.unique_gen_list:
             _sg_anims = []
             _sg_name = 'sg%s' % (_g)
             if gshowall:
-                sg = pydot.Subgraph(graph_name=str(_sg_name), suppress_disconnected=False, simplify=True, rank='same')
+                sg = pydot.Subgraph(graph_name=str(_sg_name), suppress_disconnected=False,
+                                    simplify=True, rank='same')
             else:
-                sg = pydot.Subgraph(graph_name=str(_sg_name), suppress_disconnected=True, simplify=True, rank='same')
+                sg = pydot.Subgraph(graph_name=str(_sg_name), suppress_disconnected=True,
+                                    simplify=True, rank='same')
             for _m in pedobj.pedigree:
                 if str(_m.animalID) != str(pedobj.kw['missing_parent']):
                     if int(_m.gen) == int(_g):
                         _sg_anims.append(_m.animalID)
-                        ## ->
                         # Add a node for the current animal and set some properties.
                         if gname:
                             _node_name = _m.name
@@ -445,54 +494,59 @@ def draw_pedigree(pedobj, gfilename='pedigree', gtitle='', gformat='jpg', gsize=
                         if _m.sex == 'F' or _m.sex == 'f':
                             _an_node.set_shape('ellipse')
                         sg.add_node(_an_node)
-                        ## <-
                         # Add the edges to the parent nodes, if any.
                         if str(_m.sireID) != str(pedobj.kw['missing_parent']):
                             if gname:
                                 if garrow:
-                                    sg.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].name), str(_m.name)))
+                                    sg.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].name),
+                                                           str(_m.name)))
                                 else:
-                                    sg.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].name), str(_m.name), dir='none'))
+                                    sg.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].name),
+                                                           str(_m.name), dir='none'))
                             else:
                                 if garrow:
-                                    sg.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].animalID), str(_m.animalID)))
+                                    sg.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].animalID),
+                                                           str(_m.animalID)))
                                 else:
-                                    sg.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].animalID), str(_m.animalID), dir='none'))
+                                    sg.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.sireID)-1].animalID),
+                                                           str(_m.animalID), dir='none'))
                         if str(_m.damID) != str(pedobj.kw['missing_parent']):
                             if gname:
                                 if garrow:
-                                    sg.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].name), str(_m.name)))
+                                    sg.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].name),
+                                                           str(_m.name)))
                                 else:
-                                    sg.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].name), str(_m.name), dir='none'))
+                                    sg.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].name),
+                                                           str(_m.name), dir='none'))
                             else:
                                 if garrow:
-                                    sg.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].animalID), str(_m.animalID)))
+                                    sg.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].animalID),
+                                                           str(_m.animalID)))
                                 else:
-                                    sg.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].animalID), str(_m.animalID), dir='none'))
-                        ## <-
+                                    sg.add_edge(pydot.Edge(str(pedobj.pedigree[int(_m.damID)-1].animalID),
+                                                           str(_m.animalID), dir='none'))
             if len(_sg_anims) > 0:
                 _sg_list = ''
                 for _a in _sg_anims:
                     if len(_sg_list) == 0:
-                        _sg_list = '%s' % (_a)
+                        _sg_list = '%s' % _a
                     else:
-                        _sg_list = '%s,%s' % (_sg_list,_a)
+                        _sg_list = '%s,%s' % (_sg_list, _a)
             sg.set_rank(_sg_list)
             g.add_subgraph(sg)
-            #try:
-                #print sg.get_node_list()
-            #except:
-                #print 'Could not get node list for subgraph!'
-            #try:
-                #print sg.get_edge_list()
-            #except:
-                #print 'Could not get edge list for subgraph!'
+            # try:
+            #     print(sg.get_node_list())
+            # except:
+            #     print('Could not get node list for subgraph!')
+            # try:
+            #     print(sg.get_edge_list())
+            # except:
+            #     print('Could not get edge list for subgraph!')
 
-    # For large graphs it is nice to write out the .dot file so that it does
-    # not have to be recreated whenever new_draw_pedigree is called.
-    # Especially when I am debugging.
+    # For large graphs it's nice to write out the .dot file so that it doesn't have to be recreated every time
+    # new_draw_pedigree is called, especially when I'm debugging.
     if gdot:
-        dfn = '%s.dot' % (gfilename)
+        dfn = '%s.dot' % gfilename
         #try:
         g.write(dfn)
         #except:
@@ -504,13 +558,14 @@ def draw_pedigree(pedobj, gfilename='pedigree', gtitle='', gformat='jpg', gsize=
     #try:
     outfile = '%s.%s' % (gfilename,gformat)
     g.write(outfile, prog='dot', format=gformat)
-    #    return 1
+    #    return True
     #except:
     #    outfile = '%s.%s' % (gfilename,gformat)
     #    if pedobj.kw['messages'] == 'verbose':
     #        print '[ERROR]: pyp_graphics/draw_pedigree() was unable to draw the pedigree %s.' % (outfile)
     #    logging.error('pyp_graphics/draw_pedigree() was unable to draw the pedigree %s.', (outfile))
-    #    return 0
+    #    return False
+
 
 ##
 # founders_by_year() uses matplotlib -- if available on your system -- to produce a
@@ -518,7 +573,7 @@ def draw_pedigree(pedobj, gfilename='pedigree', gtitle='', gformat='jpg', gsize=
 # @param pedobj A PyPedal pedigree object.
 # @param gfilename The name of the file to which the pedigree should be drawn
 # @param gtitle The title of the graph.
-# @retval A 1 for success and a 0 for failure.
+# @retval True for success and False for failure.
 def plot_founders_by_year(pedobj, gfilename='founders_by_year', gtitle='Founders by Birthyear'):
     """
     founders_by_year() uses matplotlib -- if available on your system -- to produce a
@@ -532,29 +587,32 @@ def plot_founders_by_year(pedobj, gfilename='founders_by_year', gtitle='Founders
         if pedobj.kw['messages'] == 'verbose':
             print('[ERROR]: pyp_graphics/plot_founders_by_year() was unable to import the matplotlib module!')
         logging.error('pyp_graphics/plot_founders_by_year() was unable to import the matplotlib module!')
-        return 0
+        return False
 
     fby = pyp_demog.founders_by_year(pedobj)
-    #print fby
+    # print(fby)
     try:
         pylab.clf()
         pylab.bar(list(fby.keys()),list(fby.values()))
         pylab.title(gtitle)
         pylab.xlabel('Year')
         pylab.ylabel('Number of founders')
-        plotfile = '%s.png' % (gfilename)
-        #print 'plotfile: ', plotfile
-        myplotfile = open(plotfile,'w')
-        #print 'myplotfile: ', myplotfile
+        plotfile = '%s.png' % gfilename
+        # print('plotfile: ', plotfile)
+        myplotfile = open(plotfile, 'w')
+        # print('myplotfile: ', myplotfile)
         pylab.savefig(myplotfile)
         myplotfile.close()
-        return 1
+        return True
     except:
         if pedobj.kw['messages'] == 'verbose':
-            print('[ERROR]: pyp_graphics/plot_founders_by_year() was unable to create the plot \'%s\' (%s.png).' % ( gtitle, gfilename ))
-        #print gtitle, gfilename
-        logging.error('pyp_graphics/plot_founders_by_year() was unable to create the plot \'%s\' (%s.png).', gtitle, gfilename)
-        return 0
+            print('[ERROR]: pyp_graphics/plot_founders_by_year() was unable to create the plot \'%s\' (%s.png).' %
+                  (gtitle, gfilename))
+        # print(gtitle, gfilename)
+        logging.error('pyp_graphics/plot_founders_by_year() was unable to create the plot \'%s\' (%s.png).',
+                      gtitle, gfilename)
+        return False
+
 
 ##
 # founders_pct_by_year() uses matplotlib -- if available on your system -- to produce a
@@ -562,7 +620,7 @@ def plot_founders_by_year(pedobj, gfilename='founders_by_year', gtitle='Founders
 # @param pedobj A PyPedal pedigree object.
 # @param gfilename The name of the file to which the pedigree should be drawn
 # @param gtitle The title of the graph.
-# @retval A 1 for success and a 0 for failure.
+# @retval True for success and False for failure.
 def plot_founders_pct_by_year(pedobj, gfilename='founders_pct_by_year', gtitle='Founders by Birthyear'):
     """
     founders_pct_by_year() uses matplotlib -- if available on your system -- to produce a
@@ -587,20 +645,23 @@ def plot_founders_pct_by_year(pedobj, gfilename='founders_pct_by_year', gtitle='
         matplotlib.use('Agg')
         import pylab
         pylab.clf()
-        pylab.plot(list(fby.keys()),list(_freqdict.values()))
+        pylab.plot(list(fby.keys()), list(_freqdict.values()))
         pylab.title(gtitle)
         pylab.xlabel('Year')
         pylab.ylabel('% founders')
-        plotfile = '%s.png' % (gfilename)
-        myplotfile = open(plotfile,'w')
+        plotfile = '%s.png' % gfilename
+        myplotfile = open(plotfile, 'w')
         pylab.savefig(myplotfile)
         myplotfile.close()
-        return 1
+        return True
     except:
         if pedobj.kw['messages'] == 'verbose':
-            print('[ERROR]: pyp_graphics/plot_pct_founders_by_year() was unable to create the plot \'%s\' (%s.png).' % (gtitle,gfilename))
-        logging.error('pyp_graphics/plot_pct_founders_by_year() was unable to create the plot \'%s\' (%s.png).' % (gtitle,gfilename))
-        return 0
+            print('[ERROR]: pyp_graphics/plot_pct_founders_by_year() was unable to create the plot \'%s\' (%s.png).' %
+                  (gtitle, gfilename))
+        logging.error('pyp_graphics/plot_pct_founders_by_year() was unable to create the plot \'%s\' (%s.png).' %
+                      (gtitle, gfilename))
+        return False
+
 
 ##
 # pcolor_matrix_pylab() implements a matlab-like 'pcolor' function to
@@ -608,8 +669,9 @@ def plot_founders_pct_by_year(pedobj, gfilename='founders_pct_by_year', gtitle='
 # Library.
 # @param A Input Numpy matrix (such as a numerator relationship matrix).
 # @param fname Output filename to which to dump the graphics (default 'tmp.png')
-# @retval A list of NewAnimal() objects; a pedigree metadata object.
-def pcolor_matrix_pylab(A, fname='pcolor_matrix_matplotlib'):
+# @param debug Turns debug messages on (True) and off (False).
+# @retval True for success and False for failure.
+def pcolor_matrix_pylab(A, fname='pcolor_matrix_matplotlib', debug=False):
     """
     pcolor_matrix_pylab() implements a matlab-like 'pcolor' function to
     display the large elements of a matrix in pseudocolor using the Python Imaging
@@ -620,16 +682,16 @@ def pcolor_matrix_pylab(A, fname='pcolor_matrix_matplotlib'):
         matplotlib.use('Agg')
         import pylab
     except ImportError:
-        if pedobj.kw['messages'] == 'verbose':
+        if debug:
             print('[ERROR]: pyp_graphics/pcolor_matrix_pylab() was unable to import the matplotlib module!')
         logging.error('pyp_graphics/pcolor_matrix_pylab() was unable to import the matplotlib module!')
-        return 0
+        return False
 
     try:
         import numpy
         pylab.clf()
         x = pylab.arange(A.shape[0])
-        X, Y = pylab.meshgrid(x,x)
+        X, Y = pylab.meshgrid(x, x)
 
         xmin = min(pylab.ravel(X))
         xmax = max(pylab.ravel(X))
@@ -639,18 +701,19 @@ def pcolor_matrix_pylab(A, fname='pcolor_matrix_matplotlib'):
         pylab.ylim(ymin, ymax)
         pylab.axis('off')
 
-        pylab.pcolor(X, Y, pylab.transpose(A))#, shading='flat')
+        pylab.pcolor(X, Y, pylab.transpose(A))
         pylab.clim(0.0, 1.0)
-        plotfile = '%s.png' % (fname)
-        myplotfile = open(plotfile,'w')
+        plotfile = '%s.png' % fname
+        myplotfile = open(plotfile, 'w')
         pylab.savefig(myplotfile)
         myplotfile.close()
-        return 1
+        return True
     except:
-        if pedobj.kw['messages'] == 'verbose':
-            print('[ERROR]: pyp_graphics/pcolor_matrix_pylab() was unable to create the plot %s.' % (plotfile))
-        logging.error('pyp_graphics/pcolor_matrix_pylab() was unable to create the plot %s.', (plotfile))
-        return 0
+        if debug:
+            print('[ERROR]: pyp_graphics/pcolor_matrix_pylab() was unable to create the plot %s.' % plotfile)
+        logging.error('pyp_graphics/pcolor_matrix_pylab() was unable to create the plot %s.', plotfile)
+        return False
+
 
 ##
 # spy_matrix_pylab() implements a matlab-like 'pcolor' function to
@@ -658,8 +721,9 @@ def pcolor_matrix_pylab(A, fname='pcolor_matrix_matplotlib'):
 # Library.
 # @param A Input Numpy matrix (such as a numerator relationship matrix).
 # @param fname Output filename to which to dump the graphics (default 'tmp.png')
-# @retval A list of NewAnimal() objects; a pedigree metadata object.
-def spy_matrix_pylab(A, fname='spy_matrix_matplotlib'):
+# @param debug Turns debug messages on (True) and off (False).
+# @retval True for success and False for failure.
+def spy_matrix_pylab(A, fname='spy_matrix_matplotlib', debug=False):
     """
     spy_matrix_pylab() implements a matlab-like 'pcolor' function to
     display the large elements of a matrix in pseudocolor using the Python Imaging
@@ -670,25 +734,27 @@ def spy_matrix_pylab(A, fname='spy_matrix_matplotlib'):
         matplotlib.use('Agg')
         import pylab
     except ImportError:
-        if pedobj.kw['messages'] == 'verbose':
+        if debug:
             print('[ERROR]: pyp_graphics/spy_matrix_pylab() was unable to import the matplotlib module!')
         logging.error('pyp_graphics/spy_matrix_pylab() was unable to import the matplotlib module!')
-        return 0
+        return False
 
     try:
         import numpy
         pylab.clf()
-        pylab.spy2(A)
-        plotfile = '%s.png' % (fname)
-        myplotfile = open(plotfile,'w')
+        # pylab.spy2(A)
+        pylab.spy(A)
+        plotfile = '%s.png' % fname
+        myplotfile = open(plotfile, 'w')
         pylab.savefig(myplotfile)
         myplotfile.close()
-        return 1
+        return True
     except:
-        if pedobj.kw['messages'] == 'verbose':
-            print('[ERROR]: pyp_graphics/spy_matrix_pylab() was unable to create the plot %s.' % (plotfile))
-        logging.error('pyp_graphics/spy_matrix_pylab() was unable to create the plot %s.', (plotfile))
-        return 0
+        if debug:
+            print('[ERROR]: pyp_graphics/spy_matrix_pylab() was unable to create the plot %s.' % plotfile)
+        logging.error('pyp_graphics/spy_matrix_pylab() was unable to create the plot %s.', plotfile)
+        return False
+
 
 ##
 # plot_line_xy() uses matplotlib -- if available on your system -- to produce a
@@ -699,8 +765,10 @@ def spy_matrix_pylab(A, fname='spy_matrix_matplotlib'):
 # @param gxlabel The label for the x-axis.
 # @param gylabel The label for the y-axis.
 # @param gformat The format in which the output file should be written  (JPG|PNG|PS).
-# @retval A 1 for success and a 0 for failure.
-def plot_line_xy(xydict, gfilename='plot_line_xy', gtitle='Value by key', gxlabel='X', gylabel='Y', gformat='png'):
+# @param debug Turns debug messages on (True) and off (False).
+# @retval True for success and False for failure.
+def plot_line_xy(xydict, gfilename='plot_line_xy', gtitle='Value by key', gxlabel='X', gylabel='Y', gformat='png',
+                 debug=False):
     """
     plot_line_xy() uses matplotlib -- if available on your system -- to produce a
     line graph of the values in a dictionary for each level of key.
@@ -710,7 +778,7 @@ def plot_line_xy(xydict, gfilename='plot_line_xy', gtitle='Value by key', gxlabe
         matplotlib.use('Agg')
         import pylab
     except ImportError:
-        if pedobj.kw['messages'] == 'verbose':
+        if debug:
             print('[ERROR]: pyp_graphics/plot_line_xy() was unable to import the matplotlib module!')
         logging.error('pyp_graphics/plot_line_xy() was unable to import the matplotlib module!')
         return 0
@@ -726,21 +794,24 @@ def plot_line_xy(xydict, gfilename='plot_line_xy', gtitle='Value by key', gxlabe
         keylist.sort()
         valuelist = [xydict[key] for key in keylist]
         # Done with the sorting
-        pylab.plot(keylist,valuelist)
+        pylab.plot(keylist, valuelist)
         pylab.title(gtitle)
         pylab.xlabel(gxlabel)
         pylab.ylabel(gylabel)
         plotfile = '%s.%s' % (gfilename, gformat)
-        myplotfile = open(plotfile,'w')
+        myplotfile = open(plotfile, 'w')
         pylab.savefig(myplotfile)
         myplotfile.close()
-        _status = 1
+        _status = True
     except:
-        if pedobj.kw['messages'] == 'verbose':
-            print('[ERROR]: pyp_graphics/plot_line_xy() was unable to create the plot \'%s\' (%s.%s).' % (gtitle,gfilename,gformat))
-        logging.error('pyp_graphics/plot_line_xy() was unable to create the plot \'%s\' (%s.%s).' % (gtitle,gfilename,gformat))
-        _status = 0
+        if debug:
+            print('[ERROR]: pyp_graphics/plot_line_xy() was unable to create the plot \'%s\' (%s.%s).' %
+                  (gtitle, gfilename, gformat))
+        logging.error('pyp_graphics/plot_line_xy() was unable to create the plot \'%s\' (%s.%s).' %
+                      (gtitle, gfilename, gformat))
+        _status = False
     return _status
+
 
 ##
 # new_draw_pedigree() uses the pygraphviz to produce a directed graph of your
@@ -762,10 +833,9 @@ def plot_line_xy(xydict, gfilename='plot_line_xy', gtitle='Value by key', gxlabe
 # @param gtitjust Indicates if the title should be center- ('c'), left- ('l'), or right-justified ('r').
 # @param gshowall Draws animals with no links to other ancestors in the pedigree (1) or suppresses them (0).
 # @param gprog Specify which program should be used to position and render the graph.
-# @retval A 1 for success and a 0 for failure.
-def new_draw_pedigree(pedobj, gfilename='pedigree', gtitle='', gformat='jpg', \
-    gsize='f', gdot=1, gorient='p', gdirec='', gname=0, garrow=1, \
-    gtitloc='b', gtitjust='c', gshowall=1, gprog='dot'):
+# @retval True for success and False for failure.
+def new_draw_pedigree(pedobj, gfilename='pedigree', gtitle='', gformat='jpg', gsize='f', gdot=1, gorient='p',
+                      gdirec='', gname=0, garrow=1, gtitloc='b', gtitjust='c', gshowall=1, gprog='dot'):
     """
     new_draw_pedigree() uses the pygraphviz to produce a directed graph of your
     pedigree with paths of inheritance as edges and animals as nodes.  If there
@@ -783,27 +853,40 @@ def new_draw_pedigree(pedobj, gfilename='pedigree', gtitle='', gformat='jpg', \
         if pedobj.kw['messages'] == 'verbose':
             print('[ERROR]: pyp_graphics/new_draw_pedigree() was unable to import the pygraphviz module!')
         logging.error('pyp_graphics/new_draw_pedigree() was unable to import the pygraphviz module!')
-        return 0
+        return False
 
-    # Maps the 0/1 flags taken by the function and maps them to Python
-    # True/False for settine edge and node attributes.
-    _tf = {0:False, 1:True}
+    # Maps the 0/1 flags taken by the function and maps them to Python True/False for setting edge and node attributes.
+    # May not be needed because 0 and 1 evaluate to False and True already?
+    _tf = {0: False, 1: True}
 
     from .pyp_utils import string_to_table_name
     _gtitle = string_to_table_name(gtitle)
 
-    if gtitloc not in ['t','b']:
+    if gtitloc not in ['t', 'b']:
         gtitloc = 'b'
-    if gtitjust not in ['c','l','r']:
+    if gtitjust not in ['c', 'l', 'r']:
         gtitjust = 'c'
 
     if not pedobj.kw['pedigree_is_renumbered']:
-        if pedobj.kw['messages'] != 'quiet':
-            print('[GRAPH]: The pedigree that you passed to pyp_graphics/new_draw_pedigree() is not renumbered. Because of this, there may be errors in the rendered pedigree. In order to insure that the pedigree drawing is accurate, you should renumber the pedigree before calling new_draw_pedigree().')
-        logging.error('The pedigree that you passed to pyp_graphics/new_draw_pedigree() is not renumbered. Because of this, there may be errors in the rendered pedigree. In order to insure that the pedigree drawing is accurate, you should renumber the pedigree before calling new_draw_pedigree().')
+        if pedobj.kw['auto_renumber']:
+            pedobj.renumber()
+            print('[INFO]: pyp_graphics/new_draw_pedigree() requires a renumbered pedigree. The pedigree you provided '
+                  'isn\'t renumbered but you enabled automatic renumbering. PyPedal will renumber the pedigree '
+                  'before continuing. This may take a few minutes if your pedigree is large.')
+            logging.info('pyp_graphics/new_draw_pedigree() requires a renumbered pedigree. The pedigree you provided '
+                         'isn\'t renumbered but you enabled automatic renumbering. PyPedal will renumber the '
+                         'pedigree before continuing. This may take a few minutes if your pedigree is large.')
+        else:
+            if pedobj.kw['messages'] != 'quiet':
+                print('[WARNING]: The pedigree you passed to pyp_graphics/new_draw_pedigree() isn\'t renumbered.'
+                      'Because of this, there may be errors in the rendered pedigree. In order to ensure that the '
+                      'pedigree drawing is accurate, you should renumber the pedigree before calling draw_pedigree().')
+            logging.warning('The pedigree you passed to pyp_graphics/new_draw_pedigree() isn\'t renumbered. Because of '
+                            'this, there may be errors in the rendered pedigree. In order to ensure that the pedigree '
+                            'drawing is accurate, you should renumber the pedigree before calling draw_pedigree().')
 
     # Create an empty pygraphviz graph using the Agraph class.
-    g = pygraphviz.AGraph(directed=True,strict=False)
+    g = pygraphviz.AGraph(directed=True, strict=False)
 
     # I'm not sure if I need to have this here or not.
     g.graph_attr['type'] = 'graph'
@@ -822,8 +905,8 @@ def new_draw_pedigree(pedobj, gfilename='pedigree', gtitle='', gformat='jpg', \
         g.graph_attr['labeljust'] = gtitjust
 
     # Set the page paper size and writeable area.
-    g.graph_attr['page'] = '8.5,11'
-    g.graph_attr['size'] = '7.5,10'
+    g.graph_attr['page'] = '8.5, 11'
+    g.graph_attr['size'] = '7.5, 10'
 
     # Set the page orientation.
     if gorient == 'l':
@@ -858,14 +941,13 @@ def new_draw_pedigree(pedobj, gfilename='pedigree', gtitle='', gformat='jpg', \
         n.attr['fontname'] = 'Helvetica'
         n.attr['fontsize'] = str(pedobj.kw['default_fontsize'])
         n.attr['height'] = '0.35'
-        #print '[DEBUG]: sex = ', _m.sex
+        # print('[DEBUG]: sex = ', _m.sex)
         if _m.sex == 'M' or _m.sex == 'm':
             n.attr['shape'] = 'box'
         elif _m.sex == 'F' or _m.sex == 'f':
             n.attr['shape'] = 'ellipse'
         else:
             n.attr['shape'] = 'octagon'
-            #pass
 
         # Add the edges to the parent nodes, if any.
         if int(_m.sireID) != pedobj.kw['missing_parent']:
@@ -877,10 +959,10 @@ def new_draw_pedigree(pedobj, gfilename='pedigree', gtitle='', gformat='jpg', \
                 # so edges should also be in order to maintain consistency.
                 #_sire_edge = pedobj.pedigree[int(_m.sireID)-1].originalID
                 _sire_edge = pedobj.pedigree[int(_m.sireID)-1].animalID
-            g.add_edge(_sire_edge,_node_name)
+            g.add_edge(_sire_edge, _node_name)
             if not _tf[garrow]:
-                #e = g.get_edge(_sire_edge,_anim_node)
-		e = g.get_edge(_sire_edge,n)
+                # e = g.get_edge(_sire_edge,_anim_node)
+                e = g.get_edge(_sire_edge, n)
                 e.attr['dir'] = 'none'
         if int(_m.damID) != pedobj.kw['missing_parent']:
             if gname:
@@ -889,30 +971,30 @@ def new_draw_pedigree(pedobj, gfilename='pedigree', gtitle='', gformat='jpg', \
                 _dam_edge = pedobj.pedigree[int(_m.damID)-1].animalID
             g.add_edge(_dam_edge,_node_name)
             if not _tf[garrow]:
-                #e = g.get_edge(_dam_edge,_anim_node)
-		e = g.get_edge(_dam_edge,n)
+                # e = g.get_edge(_dam_edge,_anim_node)
+                e = g.get_edge(_dam_edge, n)
                 e.attr['dir'] = 'none'
 
     # For large graphs it is nice to write out the .dot file so that it does
     # not have to be recreated whenever new_draw_pedigree is called.
     # Especially when I am debugging.
     if gdot:
-        dfn = '%s.dot' % (gfilename)
+        dfn = '%s.dot' % gfilename
         try:
             g.write(dfn)
         except:
             if pedobj.kw['messages'] == 'verbose':
-                print('[ERROR]: pyp_graphics/new_draw_pedigree() was unable to write the dotfile %s.' % (dfn))
-            logging.error('pyp_graphics/new_draw_pedigree() was unable to draw the dotfile %s.', (dfn))
+                print('[ERROR]: pyp_graphics/new_draw_pedigree() was unable to write the dotfile %s.' % dfn)
+            logging.error('pyp_graphics/new_draw_pedigree() was unable to draw the dotfile %s.', dfn)
 
     # Write the graph to an output file.
     try:
-        outfile = '%s.%s' % (gfilename,gformat)
-        g.draw(outfile,prog=gprog)
-        return 1
+        outfile = '%s.%s' % (gfilename, gformat)
+        g.draw(outfile, prog=gprog)
+        return True
     except:
-        outfile = '%s.%s' % (gfilename,gformat)
+        outfile = '%s.%s' % (gfilename, gformat)
         if pedobj.kw['messages'] == 'verbose':
-            print('[ERROR]: pyp_graphics/new_draw_pedigree() was unable to draw the pedigree %s.' % (outfile))
-        logging.error('pyp_graphics/new_draw_pedigree() was unable to draw the pedigree %s.', (outfile))
-        return 0
+            print('[ERROR]: pyp_graphics/new_draw_pedigree() was unable to draw the pedigree %s.' % outfile)
+        logging.error('pyp_graphics/new_draw_pedigree() was unable to draw the pedigree %s.', outfile)
+        return False
